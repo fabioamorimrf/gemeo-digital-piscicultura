@@ -259,3 +259,13 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .mc-config details { display: grid; gap: 8px; font-size: .85rem; } .mc-config summary { cursor: pointer; color: var(--ink-2); }
 .mc-config details[open] label { margin-top: 8px; }
 #mc-estado { justify-self: center; }
+
+/* clima de referência (INMET) na aba Previsão */
+.clima-ref { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.clima-ref th, .clima-ref td { padding: .38rem .55rem; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.clima-ref th:first-child, .clima-ref td:first-child { text-align: left; }
+.clima-ref th { color: var(--ink-2); font-weight: 600; font-size: .76rem; }
+.clima-ref tr.atual td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pv-comparacao { margin: 0 0 .7rem; font-size: .88rem; line-height: 1.5; }
+
+.espera-painel p { margin: 0 0 .8rem; color: var(--ink-2); line-height: 1.5; }

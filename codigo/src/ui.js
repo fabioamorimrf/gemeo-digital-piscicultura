@@ -23,7 +23,7 @@ class Barramento {
   constructor() {
     this.id = Math.random().toString(36).slice(2); this.vistos = new Set(); this.ouvintes = [];
     this.mqtt = null; this.mqttOk = false; this.info = null; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO;
-    this.fila = []; this.aoMudarRede = () => {}; this.ultEspelho = 0;
+    this.fila = []; this.aoMudarRede = () => {}; this.aoConectar = []; this.ultEspelho = 0;
     try { this.bc = new BroadcastChannel('gemeo-viveiro1'); this.bc.onmessage = e => this.chegou(e.data); } catch (e) { this.bc = null; }
     window.addEventListener('storage', e => { if (e.key === 'gemeo-viveiro1' && e.newValue) { try { this.chegou(JSON.parse(e.newValue)); } catch (_) {} } });
     this.pronto = this.iniciarMqtt().catch(() => {}).then(() => { const f = this.fila; this.fila = null; if (this.mqttOk) for (const m of f) this.publicar(m); });
@@ -60,10 +60,16 @@ class Barramento {
     if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
     this.prefixo = prefixo; this.mqttOk = false; this.erroRede = null;
     await new Promise(ok => {
-      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 2000, keepalive: 30, connectTimeout: 6000, ...extra });
-      this.mqtt = c; const fim = setTimeout(ok, 6000);
-      c.on('connect', () => { this.mqttOk = true; this.erroRede = null; c.subscribe(this.topicoAbas); clearTimeout(fim); ok(); this.aoMudarRede(); });
+      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 1500, keepalive: 20, connectTimeout: 10000, clean: true, ...extra });
+      this.mqtt = c; const fim = setTimeout(ok, 10000);
+      c.on('connect', () => {
+        this.mqttOk = true; this.erroRede = null;
+        c.subscribe(this.topicoAbas, { qos: 1 }, () => { for (const f of this.aoConectar) { try { f(); } catch (_) {} } });
+        clearTimeout(fim); ok(); this.aoMudarRede();
+      });
+      c.on('reconnect', () => this.aoMudarRede());
       c.on('error', e => { this.erroRede = e && e.message; this.aoMudarRede(); });
+      c.on('offline', () => { this.mqttOk = false; this.aoMudarRede(); });
       c.on('close', () => { if (this.mqttOk) { this.mqttOk = false; this.aoMudarRede(); } });
       c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
     });
@@ -74,7 +80,9 @@ class Barramento {
     if (this.modoRede === 'local') return `http://${this.info.ips[0]}:${this.info.porta}/simulador.html`;
     return this.cfg ? base + 'simulador.html#mqtt=' + codificar(this.cfg) : '';
   }
-  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m)); } catch (_) {} }
+  // ações do controle remoto vão com QoS 1 (entrega garantida); o resto é estado periódico, QoS 0
+  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m), { qos: m.tipo === 'acao' ? 1 : 0 }); } catch (_) {} }
+  textoRede() { return this.mqttOk ? this.descricaoRede() + ' conectado' : this.erroRede ? this.descricaoRede() + ': sem conexão, tentando de novo' : this.descricaoRede() + ': conectando...'; }
   // espelha as leituras nos tópicos do contrato (…/agua/od etc.), para ver num cliente MQTT
   espelhar(leituras, t) {
     if (!this.mqttOk || !leituras || Date.now() - this.ultEspelho < 1000) return; this.ultEspelho = Date.now();
@@ -224,7 +232,66 @@ const SENSORES = [
   { k: 'pH', nome: 'pH', un: '', min: 5, max: 10, passo: 0.05, d: 2 },
   { k: 'TAN', nome: 'Amônia total (NAT)', un: 'mg/L', min: 0, max: 6, passo: 0.05, d: 2 }
 ];
-function montarControles(raiz, obterMotor, aoMudar) {
+/* Cada mexida nos controles vira uma ação {a, ...}. Na aba dona da simulação a ação é aplicada direto;
+   no celular (controle remoto) ela é enviada ao dono, que aplica e devolve o estado. As ações são
+   absolutas (ex.: "pausado = true", não "inverter"), então repetir uma ação não muda o resultado. */
+function aplicarAcao(motor, ac) {
+  const s = motor.sim;
+  switch (ac.a) {
+    case 'vel': motor.vel = +ac.v; break;
+    case 'pausa': motor.pausado = !!ac.v; break;
+    case 'evento': { const e = EVENTOS.find(x => x.id === ac.id); if (e) e.aplicar(s); break; }
+    case 'sensor': if (SENSORES.some(x => x.k === ac.k)) { s.v[ac.k] = +ac.v; if (ac.trava) s.ctl.travas[ac.k] = +ac.v; } break;
+    case 'trava': if (ac.on) s.ctl.travas[ac.k] = +ac.v; else delete s.ctl.travas[ac.k]; break;
+    case 'dta': s.ctl.deltaTempAr = +ac.v; break;
+    case 'nuvem': s.ctl.nuvemManual = ac.v == null ? null : +ac.v; break;
+    case 'vento': s.ctl.ventoExtra = +ac.v; break;
+    case 'chuva': s.ctl.chuvaForcada = !!ac.on; break;
+    case 'net': if (s.ctl.internet !== !!ac.on) { s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.internet'); s.ctl.internet = !!ac.on; s.registrar(ac.on ? 'Internet do ESP32 restabelecida' : 'Internet do ESP32 desligada'); } break;
+    case 'falha': s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.falhaAerador'); s.ctl.falhaAerador = !!ac.on; break;
+    case 'manejo': { const m = ac.on ? 'gemeo' : 'tradicional'; if (s.ctl.manejo !== m) { s.ctl.manejo = m; s.registrar(ac.on ? 'Viveiro passa a seguir o gêmeo' : 'Viveiro passa ao manejo tradicional'); } break; }
+    case 'biometria': { const b = s.biometria(); s.registrar(`Biometria: peso médio ${fmt(b.W, 1)} g`); break; }
+  }
+}
+// executor da aba dona: aplica a ação; "reiniciar" troca o motor (trocar(novoMotor))
+function executorLocal(obterMotor, trocar, depois) {
+  return ac => {
+    if (ac.a === 'reiniciar') { if (CENARIOS[ac.cen]) trocar(new Motor(new Simulador(ac.cen), obterMotor().vel)); }
+    else aplicarAcao(obterMotor(), ac);
+    depois(ac);
+  };
+}
+// estado compacto que o dono envia ao celular (só o que a tela de controles mostra)
+function estadoRemoto(motor) {
+  const s = motor.sim, v = s.v, c = s.clima;
+  return { tipo: 'estado', t: s.t, cenario: s.cenario, vel: motor.vel, pausado: motor.pausado,
+    v: { Tw: v.Tw, OD: v.OD, pH: v.pH, TAN: v.TAN, aerador: v.aerador, W: v.W, N: v.N },
+    clima: { Ta: c.Ta, UR: c.UR, rad: c.rad, nuvem: c.nuvem }, ctl: s.ctl,
+    temporarios: s.temporarios.map(e => ({ chave: e.chave, rotulo: e.rotulo })), eventos: s.eventos.slice(-12),
+    biometrias: s.biometrias.slice(-1), origemAerador: s.origemAerador, comp: s.comparacao(), log: motor.logMsgs.slice(-40) };
+}
+// "motor" de leitura montado com o estado recebido, para reaproveitar atualizarControles no celular
+function motorDeEstado(e) {
+  return { vel: e.vel, pausado: e.pausado, logMsgs: e.log || [],
+    sim: { t: e.t, cenario: e.cenario, v: e.v, clima: e.clima, ctl: e.ctl, temporarios: e.temporarios, eventos: e.eventos, biometrias: e.biometrias, origemAerador: e.origemAerador, comparacao: () => e.comp } };
+}
+// a aba dona atende os controles remotos: responde a quem procura, aplica as ações e manda o estado
+function servirRemotos(bus, obterMotor, executar) {
+  const remotos = new Map(); let ultEnvio = 0;
+  const enviarEstado = (forcar) => {
+    const agora = Date.now();
+    for (const [id, visto] of remotos) if (agora - visto > 15000) remotos.delete(id);
+    if (!remotos.size || !obterMotor() || (!forcar && agora - ultEnvio < 500)) return;
+    ultEnvio = agora; bus.enviar(estadoRemoto(obterMotor()));
+  };
+  bus.on(m => {
+    if (!obterMotor()) return;
+    if (m.tipo === 'procurar-dono' || m.tipo === 'oi-remoto') { remotos.set(m.de, Date.now()); if (m.tipo === 'procurar-dono') bus.enviar({ tipo: 'dono', para: m.de }); enviarEstado(true); }
+    else if (m.tipo === 'acao' && m.acao) { remotos.set(m.de, Date.now()); executar(m.acao); enviarEstado(true); }
+  });
+  return { enviarEstado, remotos };
+}
+function montarControles(raiz, obterMotor, executar) {
   raiz.innerHTML = `
   <section class="card s12">
     <header><h2>Tempo e cenário</h2><span class="sutil" id="c-relogio"></span></header>
@@ -277,28 +344,34 @@ function montarControles(raiz, obterMotor, aoMudar) {
     <header><h2>Eventos no viveiro</h2></header>
     <ul class="log" id="c-eventos"></ul>
   </section>`;
-  const M = obterMotor;
-  raiz.querySelectorAll('[data-vel]').forEach(b => b.onclick = () => { M().vel = +b.dataset.vel; aoMudar(); });
-  $('#c-pausa', raiz).onclick = () => { M().pausado = !M().pausado; aoMudar(); };
-  $('#c-reiniciar', raiz).onclick = () => { aoMudar('reiniciar', $('#c-cenario', raiz).value); };
-  raiz.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EVENTOS.find(e => e.id === b.dataset.ev).aplicar(M().sim); aoMudar(); });
+  const M = obterMotor, fazer = executar;
+  raiz.querySelectorAll('[data-vel]').forEach(b => b.onclick = () => fazer({ a: 'vel', v: +b.dataset.vel }));
+  $('#c-pausa', raiz).onclick = () => fazer({ a: 'pausa', v: !M().pausado });
+  $('#c-reiniciar', raiz).onclick = () => fazer({ a: 'reiniciar', cen: $('#c-cenario', raiz).value });
+  raiz.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => fazer({ a: 'evento', id: b.dataset.ev }));
+  // sliders: no máximo uma ação a cada 120 ms enquanto arrasta, e sempre a última ao soltar
+  const limitado = (fn) => { let ult = 0, tmr = null; return (final) => { clearTimeout(tmr); const agora = Date.now(); if (final || agora - ult > 120) { ult = agora; fn(); } else tmr = setTimeout(() => { ult = Date.now(); fn(); }, 120); }; };
   for (const x of SENSORES) {
     const sl = $('#c-s-' + x.k, raiz), tr = $('#c-t-' + x.k, raiz);
     sl.addEventListener('pointerdown', () => sl.dataset.mexendo = '1');
     window.addEventListener('pointerup', () => delete sl.dataset.mexendo);
-    sl.oninput = () => { const v = +sl.value, s = M().sim; s.v[x.k] = v; if (tr.checked) s.ctl.travas[x.k] = v; $('#c-o-' + x.k, raiz).textContent = fmt(v, x.d) + ' ' + x.un; };
-    tr.onchange = () => { const s = M().sim; if (tr.checked) s.ctl.travas[x.k] = +sl.value; else delete s.ctl.travas[x.k]; };
+    const mandar = limitado(() => fazer({ a: 'sensor', k: x.k, v: +sl.value, trava: tr.checked }));
+    sl.oninput = () => { $('#c-o-' + x.k, raiz).textContent = fmt(+sl.value, x.d) + ' ' + x.un; mandar(false); };
+    sl.onchange = () => mandar(true);
+    tr.onchange = () => fazer({ a: 'trava', k: x.k, on: tr.checked, v: +sl.value });
   }
-  const dta = $('#c-dta', raiz); dta.oninput = () => { M().sim.ctl.deltaTempAr = +dta.value; aoMudar(); };
-  const nv = $('#c-nuvem', raiz), na = $('#c-nuvem-auto', raiz);
-  nv.oninput = () => { na.checked = false; M().sim.ctl.nuvemManual = +nv.value; aoMudar(); };
-  na.onchange = () => { M().sim.ctl.nuvemManual = na.checked ? null : +nv.value; aoMudar(); };
-  const ve = $('#c-vento', raiz); ve.oninput = () => { M().sim.ctl.ventoExtra = +ve.value; aoMudar(); };
-  $('#c-chuva', raiz).onchange = e => { M().sim.ctl.chuvaForcada = e.target.checked; aoMudar(); };
-  $('#c-net', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.internet'); s.ctl.internet = e.target.checked; s.registrar(e.target.checked ? 'Internet do ESP32 restabelecida' : 'Internet do ESP32 desligada'); aoMudar(); };
-  $('#c-falha', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.falhaAerador'); s.ctl.falhaAerador = e.target.checked; aoMudar(); };
-  $('#c-manejo', raiz).onchange = e => { M().sim.ctl.manejo = e.target.checked ? 'gemeo' : 'tradicional'; M().sim.registrar(e.target.checked ? 'Viveiro passa a seguir o gêmeo' : 'Viveiro passa ao manejo tradicional'); aoMudar(); };
-  $('#c-biometria', raiz).onclick = () => { const b = M().sim.biometria(); M().sim.registrar(`Biometria: peso médio ${fmt(b.W, 1)} g`); aoMudar(); };
+  const dta = $('#c-dta', raiz), mDta = limitado(() => fazer({ a: 'dta', v: +dta.value }));
+  dta.oninput = () => mDta(false); dta.onchange = () => mDta(true);
+  const nv = $('#c-nuvem', raiz), na = $('#c-nuvem-auto', raiz), mNv = limitado(() => fazer({ a: 'nuvem', v: +nv.value }));
+  nv.oninput = () => { na.checked = false; mNv(false); }; nv.onchange = () => mNv(true);
+  na.onchange = () => fazer({ a: 'nuvem', v: na.checked ? null : +nv.value });
+  const ve = $('#c-vento', raiz), mVe = limitado(() => fazer({ a: 'vento', v: +ve.value }));
+  ve.oninput = () => mVe(false); ve.onchange = () => mVe(true);
+  $('#c-chuva', raiz).onchange = e => fazer({ a: 'chuva', on: e.target.checked });
+  $('#c-net', raiz).onchange = e => fazer({ a: 'net', on: e.target.checked });
+  $('#c-falha', raiz).onchange = e => fazer({ a: 'falha', on: e.target.checked });
+  $('#c-manejo', raiz).onchange = e => fazer({ a: 'manejo', on: e.target.checked });
+  $('#c-biometria', raiz).onclick = () => fazer({ a: 'biometria' });
 }
 function atualizarControles(raiz, motor) {
   if (!raiz.firstElementChild) return;
@@ -364,9 +437,14 @@ function iniciarPainel() {
     const sim = snapshot ? Simulador.restaurar(snapshot.estado) : new Simulador(gemeo.cenario || 'verao');
     est.motor = new Motor(sim, snapshot ? snapshot.vel : est.vel); est.modo = 'interno';
     gemeo.sincronizar(est.motor.sync()); sim.gemeoAtivo = true; sim.ultimoComando = sim.t;
-    montarControles(ctlInt, () => est.motor, (acao, arg) => { if (acao === 'reiniciar') { est.motor = new Motor(new Simulador(arg), est.motor.vel); gemeo.sincronizar(est.motor.sync()); est.motor.sim.gemeoAtivo = true; } passo(0); });
+    montarControles(ctlInt, () => est.motor, est.executar);
     render();
   }
+  // ações dos controles (gaveta desta aba ou celular): só valem quando a simulação roda aqui
+  est.executar = executorLocal(() => est.motor, novo => { est.motor = novo; gemeo.sincronizar(novo.sync()); novo.sim.gemeoAtivo = true; }, () => passo(0));
+  // o painel é o único dono da simulação: o celular só manda ações e recebe o estado
+  const remoto = servirRemotos(bus, () => est.modo === 'interno' ? est.motor : null, ac => { if (est.modo === 'interno') est.executar(ac); });
+  est.remotos = remoto.remotos;
   function passo(seg) {
     if (est.modo !== 'interno') return;
     est.motor.avancar(seg);
@@ -374,6 +452,7 @@ function iniciarPainel() {
     bus.espelhar(m.leituras, m.t);
     tratar(m);
     atualizarControles(ctlInt, est.motor);
+    remoto.enviarEstado(false);
   }
   function tratar(m) {
     if (est.modo === 'interno' && !m.offline) bus.enviar({ ...m, tipo: 'tick-espelho' });
@@ -385,12 +464,15 @@ function iniciarPainel() {
     render();
   }
   bus.on(m => {
-    if (m.tipo === 'quem-simula?' && est.modo === 'interno') {
-      bus.enviar({ tipo: 'snapshot', estado: est.motor.sim.snapshot(), vel: est.motor.vel });
-      est.modo = 'externo'; est.motor = null; gav.hidden = true; ctlInt.innerHTML = ''; render();
-    } else if (m.tipo === 'sync') { if (est.modo === 'interno' || (m.para && m.para !== bus.id)) return; est.modo = 'externo'; gemeo.sincronizar(m); est.ultimoTick = Date.now(); render(); }
-    else if (m.tipo === 'tick') { if (est.modo === 'interno') return; if (est.modo !== 'externo') { est.modo = 'externo'; bus.enviar({ tipo: 'pedir-sync' }); return; } tratar(m); }
-    else if (m.tipo === 'tchau' && est.modo === 'externo') { est.ultimoTick = 0; render(); }
+    if (m.tipo === 'sync') { if (est.modo === 'interno' || (m.para && m.para !== bus.id)) return; est.modo = 'externo'; est.fonte = m.de; gemeo.sincronizar(m); est.ultimoTick = Date.now(); render(); }
+    else if (m.tipo === 'tick') {
+      if (est.modo === 'interno') return;
+      // segue um único simulador: ticks de outra origem são ignorados enquanto a fonte atual estiver viva
+      if (est.modo === 'externo' && est.fonte && m.de !== est.fonte) { if (Date.now() - est.ultimoTick > 5000) { est.fonte = null; est.modo = 'procurando'; bus.enviar({ tipo: 'pedir-sync' }); } return; }
+      if (est.modo !== 'externo') { est.modo = 'externo'; bus.enviar({ tipo: 'pedir-sync' }); return; }
+      tratar(m);
+    }
+    else if (m.tipo === 'tchau' && est.modo === 'externo' && m.de === est.fonte) { est.ultimoTick = 0; render(); }
     else if (m.tipo === 'pedir-sync' && est.modo === 'interno') bus.enviar({ ...est.motor.sync(), para: m.de });
     else if (m.tipo === 'pedir-previsao' && est.modo === 'interno') bus.enviar({ tipo: 'previsao', para: m.de, t: est.motor.sim.t, cenario: est.motor.sim.cenario, dias: est.motor.sim.previsaoClima(7) });
   });
@@ -468,7 +550,7 @@ function iniciarPainel() {
     const online = g.online && !semSinal;
     $('#chip-disp').className = 'chip ' + (online ? 'ok' : 'crit');
     $('#chip-disp').textContent = online ? 'ESP32 online' : semSinal ? 'Simulador parado' : 'ESP32 offline';
-    $('#chip-fonte').textContent = est.modo === 'interno' ? 'Simulação nesta aba' : est.modo === 'externo' ? (bus.mqttOk ? 'Simulador via ' + bus.descricaoRede() : 'Simulador em outra aba') : 'Procurando simulador';
+    $('#chip-fonte').textContent = est.modo === 'interno' ? 'Simulação nesta aba' + (est.remotos && est.remotos.size ? ' · celular conectado' : '') : est.modo === 'externo' ? (bus.mqttOk ? 'Simulador via ' + bus.descricaoRede() : 'Simulador em outra aba') : 'Procurando simulador';
     $('#chip-aer').className = 'chip ' + (g.modoAeracao === 'AUTO' ? 'ok' : 'warn');
     $('#chip-aer').textContent = 'Aeração ' + (g.modoAeracao === 'AUTO' ? 'automática' : 'manual');
     $('#chip-vel').textContent = est.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === est.vel) || [0, ''])[1];
@@ -621,38 +703,75 @@ function tendencia(h, k, d, un) {
 /* ---------------- aba do simulador ---------------- */
 function iniciarSimulador() {
   const bus = new Barramento();
-  let motor = null, ultimoContatoPainel = 0;
+  // papel desta página: 'procurando' → 'remoto' (o painel simula, aqui só se controla) ou 'dono' (sem painel: simula aqui)
+  let papel = 'procurando', motor = null, ultimoContatoPainel = 0, ultEstado = 0, estado = null, seguraAte = 0, loop = null;
   const raiz = $('#controles');
-  const aoMudar = (acao, arg) => {
-    if (acao === 'reiniciar') { motor = new Motor(new Simulador(arg), motor.vel); bus.enviar(motor.sync()); }
-    atualizarControles(raiz, motor); atualizarTopo();
-  };
-  function comecar(sim, vel) {
-    motor = new Motor(sim, vel);
-    montarControles(raiz, () => motor, aoMudar);
+  window.__simPg = () => ({ papel, motor, estado });
+  const nuvem = () => bus.modoRede === 'nuvem';
+
+  // ---- modo dono: a simulação roda nesta página (sem painel aberto)
+  const executarDono = executorLocal(() => motor, novo => { motor = novo; bus.enviar(motor.sync()); }, () => { atualizarControles(raiz, motor); atualizarTopo(); });
+  const servico = servirRemotos(bus, () => papel === 'dono' ? motor : null, ac => executarDono(ac));
+  function virarDono(sim, vel) {
+    if (papel === 'dono') return;
+    papel = 'dono'; motor = new Motor(sim, vel);
+    montarControles(raiz, () => motor, executarDono);
     bus.enviar(motor.sync());
-    setInterval(() => { motor.avancar(0.25); const m = motor.mensagem(); bus.enviar(m); bus.espelhar(m.leituras, m.t); atualizarControles(raiz, motor); atualizarTopo(); }, 250);
+    loop = setInterval(() => { motor.avancar(0.25); const m = motor.mensagem(); bus.enviar(m); bus.espelhar(m.leituras, m.t); atualizarControles(raiz, motor); atualizarTopo(); servico.enviarEstado(false); }, 250);
+  }
+
+  // ---- modo remoto: o painel é o dono; cada mexida vira uma ação enviada a ele
+  function virarRemoto() {
+    if (papel === 'remoto') return;
+    papel = 'remoto';
+    montarControles(raiz, () => motorDeEstado(estado), ac => { seguraAte = Date.now() + 700; bus.enviar({ tipo: 'acao', acao: ac }); });
+    if (estado) desenharRemoto();
+  }
+  function desenharRemoto() { if (Date.now() >= seguraAte) atualizarControles(raiz, motorDeEstado(estado)); atualizarTopo(); }
+
+  function esperando() {
+    if (papel !== 'procurando') return;
+    raiz.innerHTML = `<section class="card s12 espera-painel"><header><h2>Procurando o painel${nuvem() ? ` na sala ${esc(bus.cfg.sala)}` : ''}</h2></header>
+      <p>Este aparelho funciona como controle remoto: a simulação roda no painel, aberto no computador. Deixe o painel aberto e conectado à mesma sala; os controles aparecem aqui sozinhos.</p>
+      <div class="acoes-topo"><button class="btn" id="bt-sim-aqui">Simular só neste aparelho</button></div></section>`;
+    $('#bt-sim-aqui').onclick = () => virarDono(new Simulador('verao'), 5);
   }
   function atualizarTopo() {
-    const s = motor.sim;
+    const fonte = papel === 'dono' ? motor : papel === 'remoto' && estado ? motorDeEstado(estado) : null;
+    const painelOk = papel === 'remoto' ? Date.now() - ultEstado < 5000 : Date.now() - ultimoContatoPainel < 4000;
+    const chP = $('#chip-painel');
+    chP.className = 'chip ' + (painelOk ? 'ok' : papel === 'procurando' ? 'neutro' : 'warn');
+    chP.textContent = papel === 'remoto' ? (painelOk ? 'Controlando o painel' : 'Painel sem resposta') : papel === 'procurando' ? 'Procurando o painel' : painelOk ? 'Painel conectado' : 'Painel não aberto';
+    if (!fonte) { $('#chip-net').hidden = true; $('#chip-vel').hidden = true; return; }
+    const s = fonte.sim; $('#chip-net').hidden = false; $('#chip-vel').hidden = false;
     $('#hora').textContent = fmtHora(s.t); $('#data').textContent = fmtData(s.t) + ' · ' + CENARIOS[s.cenario].nome;
-    const painelOk = Date.now() - ultimoContatoPainel < 4000;
-    $('#chip-painel').className = 'chip ' + (painelOk ? 'ok' : 'warn'); $('#chip-painel').textContent = painelOk ? 'Painel conectado' : 'Painel não aberto';
     $('#chip-net').className = 'chip ' + (s.ctl.internet ? 'ok' : 'crit'); $('#chip-net').textContent = s.ctl.internet ? 'Internet ok' : 'Sem internet';
-    $('#chip-vel').textContent = motor.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === motor.vel) || [0, ''])[1];
+    $('#chip-vel').textContent = fonte.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === fonte.vel) || [0, ''])[1];
   }
+
   bus.on(m => {
-    if (m.tipo === 'snapshot' && !motor) { clearTimeout(espera); comecar(Simulador.restaurar(m.estado), m.vel); }
-    else if (!motor) return;
-    else if (m.tipo === 'pedir-sync') { bus.enviar({ ...motor.sync(), para: m.de }); if (!m.previsao) ultimoContatoPainel = Date.now(); }
+    if (m.para && m.para !== bus.id) return;
+    if ((m.tipo === 'dono' || m.tipo === 'estado') && papel !== 'dono') {
+      ultEstado = Date.now();
+      if (m.tipo === 'estado') { estado = m; virarRemoto(); desenharRemoto(); }
+      return;
+    }
+    if (papel !== 'dono') return;
+    if (m.tipo === 'pedir-sync') { bus.enviar({ ...motor.sync(), para: m.de }); if (!m.previsao) ultimoContatoPainel = Date.now(); }
     else if (m.tipo === 'pedir-previsao') bus.enviar({ tipo: 'previsao', para: m.de, t: motor.sim.t, cenario: motor.sim.cenario, dias: motor.sim.previsaoClima(7) });
     else if (m.tipo === 'comando') { ultimoContatoPainel = Date.now(); motor.comando(m.topico, m.valor); }
   });
   window.addEventListener('beforeunload', () => bus.enviar({ tipo: 'tchau' }));
-  let espera = null;
-  bus.pronto.then(() => { bus.enviar({ tipo: 'quem-simula?' }); espera = setTimeout(() => { if (!motor) comecar(new Simulador('verao'), 5); }, 900); atualizarRede(); });
+  const procurar = () => { if (papel !== 'dono') bus.enviar({ tipo: papel === 'remoto' ? 'oi-remoto' : 'procurar-dono' }); };
+  bus.aoConectar.push(procurar);           // a cada (re)conexão com o broker, procura o painel de novo
+  bus.pronto.then(() => {
+    esperando(); procurar(); atualizarRede(); atualizarTopo();
+    // sem sala na nuvem e sem painel nesta máquina, a página simula sozinha (como antes)
+    setTimeout(() => { if (papel === 'procurando' && !nuvem()) virarDono(new Simulador('verao'), 5); }, 1200);
+  });
+  setInterval(() => { procurar(); if (papel !== 'dono') atualizarTopo(); }, 3000);
   bus.aoMudarRede = () => atualizarRede();
-  function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : 'crit'); ch.textContent = bus.mqttOk ? bus.descricaoRede() + ' conectado' : bus.descricaoRede() + ': sem conexão'; }
+  function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : bus.erroRede ? 'crit' : 'neutro'); ch.textContent = bus.textoRede(); }
 }
 
 /* ---------------- aba Previsão de 7 dias ---------------- */
@@ -776,6 +895,15 @@ function iniciarPrevisao(ctx = null) {   // ctx: aba embutida no painel ({ bus, 
       <div class="kv"><span class="rotulo">Noite mais arriscada sem aeração</span><b>${piorOD ? `${DIAS_SEMANA[new Date(piorOD.t).getUTCDay()]} ${fmtDiaMes(piorOD.t)} · ${fmt(piorOD.semAer.od, 1)} mg/L` : '--'}</b></div>
       <div class="kv"><span class="rotulo">Crescimento esperado</span><b>${fmt(est.W, 0)} → ${fmt(Wfim, 0)} g</b><span class="sutil" style="font-size:.8rem">≈ ${fmt(ganhoKg, 0)} kg de biomassa ${refsTxt(['yi1998', 'dampin2012'])}</span></div>
       <div class="kv"><span class="rotulo">Dias com alerta</span><b>${crit} crítico${crit === 1 ? '' : 's'} · ${aten} de atenção</b></div>`;
+    // clima de referência (INMET A002, 2023-2025) e comparação da semana com o mês
+    const mRef = mesDe(r.dias[0].t), nD = r.dias.length;
+    const media = k => r.dias.reduce((s, d) => s + d[k], 0) / nD;
+    const dTx = media('tmax') - NORMAIS.tmax[mRef], dTn = media('tmin') - NORMAIS.tmin[mRef];
+    const chuvaSem = soma('chuva'), chuvaEsp = NORMAIS.chuva[mRef] / 30.4 * nD;
+    const sinal = x => (x >= 0 ? '+' : '−') + fmt(Math.abs(x), 1);
+    $('#pv-ref-semana').innerHTML = `<b>Semana prevista contra a referência de ${MESES[mRef]}:</b> máximas ${sinal(dTx)} °C e mínimas ${sinal(dTn)} °C em relação à média; chuva de ${fmt(chuvaSem, 0)} mm, contra ${fmt(chuvaEsp, 0)} mm esperados em ${nD} dias. ${Math.abs(dTx) > 2 * NORMAIS.anomDP[mRef] ? 'A semana foge bastante do normal do mês (mais de 2 desvios-padrão).' : 'Dentro da variação comum do mês.'} ${refsTxt(['inmet'])}`;
+    $('#pv-ref').innerHTML = MESES.map((nome, m) => `<tr${m === mRef ? ' class="atual"' : ''}><td><b>${nome}</b></td><td class="num">${fmt(NORMAIS.tmax[m], 1)} °C</td><td class="num">${fmt(NORMAIS.tmin[m], 1)} °C</td><td class="num">${fmt(NORMAIS.tmed[m], 1)} °C</td><td class="num">± ${fmt(NORMAIS.anomDP[m], 1)} °C</td><td class="num">${fmt(NORMAIS.chuva[m], 0)} mm</td><td class="num">${Math.round(NORMAIS.pchuva[m] * 100)}%</td><td class="num">${fmt(NORMAIS.ur[m], 0)}%</td><td class="num">${fmt(NORMAIS.vento[m], 1)} m/s</td><td class="num">${fmt(NORMAIS.rad[m], 1)} MJ/m²</td><td class="num">${fmt(NORMAIS.pressao[m], 0)} hPa</td></tr>`).join('');
+    $('#pv-ref-nota').textContent = `Calculado pelo protótipo com os dados horários de ${NORMAIS.estacao} de 2023 a 2025 (hora local = UTC − 3). Máxima e mínima são médias das máximas e mínimas de cada dia; "dias com chuva" conta dias com 1 mm ou mais; "variação diária" é o desvio-padrão da temperatura média de um dia em torno da média do mês. 2025 tem falhas na estação de junho a dezembro. Extremos do período: ${fmt(NORMAIS.extremos.tmax, 1)} °C, ${fmt(NORMAIS.extremos.tmin, 1)} °C e ${fmt(NORMAIS.extremos.chuvaDia, 0)} mm num só dia. Vento medido a 10 m. O clima simulado usa estes números e o ciclo médio de cada hora.`;
     $('#pv-metodo').innerHTML = `Como é calculado: a água segue a média do ar ${refsTxt(['rotta2023'])}; o OD vem do balanço de oxigênio ${refsTxt(['boyd1978', 'romaire1979'])} com os parâmetros que o gêmeo ajustou nas últimas 24 h${est.theta ? '' : ' (sem dados ainda: valores iniciais)'} e a radiação prevista; a ração usa a tabela e o fator de temperatura ${refsTxt(['senar2019'])} limitados ao apetite do modelo de Yi; o lote vem das biometrias do viveiro.`;
   }
   window.addEventListener('resize', () => st.dias && desenhar());

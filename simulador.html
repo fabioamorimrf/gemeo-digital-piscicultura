@@ -269,6 +269,16 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .mc-config details[open] label { margin-top: 8px; }
 #mc-estado { justify-self: center; }
 
+/* clima de referência (INMET) na aba Previsão */
+.clima-ref { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.clima-ref th, .clima-ref td { padding: .38rem .55rem; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.clima-ref th:first-child, .clima-ref td:first-child { text-align: left; }
+.clima-ref th { color: var(--ink-2); font-weight: 600; font-size: .76rem; }
+.clima-ref tr.atual td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pv-comparacao { margin: 0 0 .7rem; font-size: .88rem; line-height: 1.5; }
+
+.espera-painel p { margin: 0 0 .8rem; color: var(--ink-2); line-height: 1.5; }
+
 </style>
 </head>
 <body>
@@ -321,20 +331,105 @@ const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 const fmtDiaMes = t => { const d = new Date(t); return d.getUTCDate() + ' ' + MESES[d.getUTCMonth()]; };
 
 /* ---------------- clima de Goiânia ----------------
-   Normais climatológicas 1991-2020 do INMET para Goiânia, tiradas dos balanços mensais
-   publicados pelo INMET [inmet]. Valores marcados "d" foram derivados (ver página Fontes):
-   maio e dezembro por interpolação ou pela normal da estação; médias ausentes = (máx+mín)/2 − 0,65 °C. */
+   Estação automática A002 Goiânia (GO) do INMET, dados horários de 01/01/2023 a 31/12/2025 [inmet].
+   Médias calculadas pelo protótipo a partir dos três arquivos anuais do Banco de Dados Meteorológicos
+   (2023.zip, 2024.zip, 2025.zip). Horas sem leitura (-9999) foram ignoradas; 2025 tem falhas de
+   junho a dezembro, então esses meses pesam mais 2023 e 2024. Hora local = UTC − 3.
+   tmax/tmin = média das máximas/mínimas diárias; chuva = total médio do mês; pchuva = fração de dias
+   com 1 mm ou mais; rad = radiação global média em MJ/m²/dia; anomDP = desvio-padrão da temperatura
+   média diária em torno da média do mês; anomAR1 = correlação de um dia com o seguinte. */
 const NORMAIS = {
-  tmax:  [30.6, 31.0, 30.9, 31.2, 30.6 /*d*/, 30.0, 30.6, 32.3 /*d*/, 34.0, 33.2, 31.1, 31.1 /*d*/],
-  tmin:  [20.1, 20.0, 20.0, 19.3, 17.2 /*d*/, 15.2, 14.8, 16.8 /*d*/, 19.4, 20.3, 20.3, 20.2 /*d*/],
-  tmed:  [24.7 /*d*/, 24.7, 24.7, 24.8, 23.3 /*d*/, 22.0 /*d*/, 22.5, 24.5, 26.3, 26.2, 25.0, 25.0 /*d*/],
-  chuva: [249.2, 235.8, 258.5, 137.7, 30.3, 8.4, 1.5, 9.5, 44.3, 144.1, 219.6, 260.8 /*d*/],     // mm/mês
-  // sem fonte (parâmetros do simulador): umidade média e chance de dia chuvoso
-  ur:     [77, 76, 77, 72, 64, 56, 47, 41, 47, 62, 73, 78],
-  pchuva: [0.65, 0.57, 0.55, 0.33, 0.10, 0.03, 0.03, 0.07, 0.20, 0.43, 0.60, 0.68]
+  tmax: [31.1, 32.1, 31.9, 31.8, 30.7, 30.4, 31.1, 32.8, 36.1, 34.6, 33.0, 32.2],
+  tmin: [20.5, 20.0, 20.4, 19.9, 16.0, 14.7, 13.4, 15.4, 19.1, 21.2, 20.9, 20.6],
+  tmed: [24.3, 24.6, 24.8, 24.5, 22.5, 21.7, 21.6, 23.5, 27.1, 26.7, 25.6, 25.0],
+  chuva: [267.6, 236.2, 153.5, 151.7, 28.0, 5.7, 0.0, 7.8, 20.8, 179.4, 299.5, 235.4],
+  pchuva: [0.60, 0.61, 0.46, 0.37, 0.01, 0.01, 0.00, 0.04, 0.13, 0.42, 0.62, 0.66],
+  ur: [76, 73, 73, 73, 64, 60, 52, 44, 42, 61, 69, 72],
+  vento: [0.8, 0.8, 0.8, 0.8, 0.9, 0.8, 0.9, 1.1, 1.1, 0.9, 0.8, 0.8],
+  pressao: [930.8, 931.8, 932.0, 931.8, 934.1, 935.3, 936.0, 934.5, 932.3, 930.8, 930.3, 930.4],
+  rad: [18.6, 19.3, 17.1, 16.3, 16.0, 14.5, 15.3, 15.9, 19.2, 18.3, 19.1, 19.4],
+  anomDP: [1.26, 1.40, 1.33, 1.02, 1.42, 1.07, 1.25, 2.01, 1.54, 2.22, 2.02, 1.49],
+  anomAR1: 0.69,
+  // ciclo médio de cada hora local (0 a 23 h), um vetor por mês
+  hT: [
+    [21.9, 21.6, 21.4, 21.2, 21.0, 20.9, 20.9, 21.8, 23.6, 25.3, 26.8, 27.8, 28.4, 28.8, 28.8, 28.2, 27.4, 26.5, 25.4, 24.1, 23.5, 23.1, 22.6, 22.3],
+    [21.8, 21.5, 21.2, 21.0, 20.8, 20.6, 20.4, 21.2, 23.2, 25.5, 27.6, 29.0, 29.4, 29.7, 29.5, 29.2, 28.4, 27.8, 26.1, 24.7, 23.6, 22.9, 22.5, 22.1],
+    [22.2, 21.9, 21.6, 21.3, 21.1, 20.9, 20.8, 21.5, 23.6, 25.9, 27.4, 28.7, 29.3, 29.7, 29.6, 29.3, 28.4, 27.3, 26.0, 24.7, 24.0, 23.5, 23.0, 22.5],
+    [21.7, 21.4, 21.1, 20.9, 20.7, 20.5, 20.3, 20.7, 23.2, 25.6, 27.5, 28.9, 29.6, 29.9, 30.1, 29.6, 28.7, 27.1, 25.3, 24.2, 23.5, 22.9, 22.4, 22.0],
+    [18.9, 18.4, 17.8, 17.4, 16.9, 16.6, 16.3, 16.7, 19.9, 23.3, 25.9, 27.6, 28.7, 29.3, 29.8, 29.6, 28.8, 27.0, 24.6, 23.2, 22.0, 21.1, 20.3, 19.5],
+    [18.1, 17.5, 16.8, 16.5, 16.0, 15.6, 15.2, 15.4, 17.9, 22.1, 25.1, 27.2, 28.3, 28.9, 29.3, 29.4, 28.0, 26.6, 24.2, 22.5, 21.3, 20.4, 19.5, 18.7],
+    [17.7, 17.0, 16.2, 15.6, 14.9, 14.4, 13.9, 14.0, 17.0, 21.4, 25.2, 27.4, 28.6, 29.5, 30.0, 30.2, 29.0, 27.5, 24.8, 23.2, 21.6, 20.5, 19.5, 18.6],
+    [19.7, 18.9, 18.1, 17.4, 16.8, 16.3, 16.2, 16.9, 20.5, 24.1, 27.1, 29.1, 30.4, 31.3, 31.5, 31.4, 30.8, 29.4, 26.9, 25.1, 23.5, 22.4, 21.1, 20.4],
+    [23.2, 22.4, 21.9, 21.1, 20.6, 20.2, 20.0, 21.2, 24.7, 28.6, 31.2, 32.9, 33.9, 34.3, 34.6, 34.4, 33.9, 32.3, 29.9, 28.1, 26.9, 25.8, 25.0, 24.1],
+    [23.6, 23.2, 22.8, 22.5, 22.1, 21.8, 21.7, 23.3, 25.6, 27.9, 29.9, 31.1, 32.1, 32.5, 32.5, 32.0, 31.3, 30.1, 28.4, 27.0, 26.0, 25.2, 24.7, 24.1],
+    [22.7, 22.4, 22.1, 21.8, 21.6, 21.4, 21.6, 23.1, 25.3, 27.3, 28.8, 29.9, 30.4, 30.8, 30.6, 30.4, 29.5, 28.3, 26.5, 25.2, 24.6, 23.9, 23.5, 23.1],
+    [22.3, 21.9, 21.6, 21.4, 21.3, 21.1, 21.2, 22.4, 24.3, 26.3, 27.6, 28.8, 29.6, 29.9, 30.1, 29.6, 28.7, 28.0, 26.2, 24.8, 24.0, 23.3, 22.9, 22.5]
+  ],
+  hUR: [
+    [87, 88, 89, 90, 90, 90, 91, 88, 80, 71, 65, 61, 58, 56, 56, 59, 62, 65, 69, 76, 79, 81, 83, 84],
+    [86, 86, 88, 89, 90, 90, 91, 89, 81, 71, 62, 55, 52, 51, 51, 52, 55, 58, 65, 72, 77, 80, 82, 84],
+    [84, 86, 87, 88, 89, 90, 90, 88, 79, 68, 62, 57, 54, 52, 52, 53, 57, 60, 66, 72, 75, 79, 81, 83],
+    [86, 88, 89, 89, 90, 90, 90, 90, 80, 69, 61, 54, 51, 50, 48, 50, 53, 59, 67, 73, 77, 80, 82, 85],
+    [80, 82, 84, 86, 87, 88, 88, 88, 76, 62, 53, 46, 41, 38, 36, 36, 37, 44, 53, 59, 65, 70, 73, 77],
+    [74, 76, 79, 81, 83, 84, 85, 85, 77, 60, 48, 40, 36, 33, 31, 30, 33, 37, 46, 52, 58, 62, 67, 71],
+    [66, 68, 72, 74, 77, 79, 81, 82, 72, 54, 41, 33, 29, 26, 25, 24, 25, 29, 36, 41, 48, 53, 58, 62],
+    [54, 57, 61, 64, 67, 70, 70, 68, 57, 44, 35, 29, 26, 23, 22, 22, 22, 24, 29, 34, 38, 43, 47, 51],
+    [50, 53, 56, 60, 62, 64, 65, 64, 50, 37, 30, 26, 23, 23, 22, 23, 23, 26, 30, 35, 37, 41, 45, 48],
+    [72, 74, 76, 78, 80, 81, 81, 76, 66, 56, 49, 45, 42, 40, 40, 41, 44, 46, 51, 57, 61, 65, 68, 71],
+    [80, 82, 83, 85, 86, 86, 87, 81, 71, 62, 56, 52, 49, 48, 48, 48, 51, 56, 63, 68, 72, 76, 78, 79],
+    [84, 86, 87, 88, 89, 89, 89, 86, 76, 67, 61, 56, 52, 51, 51, 51, 55, 58, 65, 71, 75, 78, 81, 83]
+  ],
+  hV: [
+    [0.3, 0.3, 0.2, 0.3, 0.3, 0.2, 0.2, 0.4, 0.8, 1.1, 1.3, 1.4, 1.5, 1.6, 1.5, 1.6, 1.4, 1.2, 0.8, 0.6, 0.5, 0.5, 0.4, 0.5],
+    [0.4, 0.3, 0.3, 0.3, 0.4, 0.3, 0.4, 0.4, 0.8, 1.1, 1.4, 1.5, 1.7, 1.5, 1.4, 1.4, 1.4, 1.2, 1.0, 0.6, 0.6, 0.6, 0.6, 0.4],
+    [0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.5, 0.8, 1.0, 1.3, 1.5, 1.6, 1.4, 1.5, 1.4, 1.2, 1.1, 0.7, 0.6, 0.4, 0.4, 0.5, 0.4],
+    [0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.7, 1.1, 1.3, 1.5, 1.4, 1.5, 1.4, 1.3, 1.3, 1.2, 0.9, 0.6, 0.5, 0.5, 0.4, 0.3],
+    [0.4, 0.4, 0.3, 0.3, 0.4, 0.4, 0.4, 0.5, 0.8, 1.3, 1.8, 2.0, 1.8, 1.6, 1.6, 1.4, 1.3, 1.1, 0.6, 0.5, 0.4, 0.4, 0.5, 0.4],
+    [0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 1.1, 1.7, 1.9, 1.7, 1.7, 1.5, 1.4, 1.2, 0.9, 0.6, 0.4, 0.5, 0.5, 0.5, 0.5],
+    [0.5, 0.5, 0.5, 0.4, 0.4, 0.3, 0.4, 0.4, 0.6, 1.1, 1.8, 1.9, 1.9, 1.7, 1.6, 1.5, 1.3, 1.1, 0.5, 0.5, 0.5, 0.5, 0.6, 0.5],
+    [0.7, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.7, 1.0, 1.5, 1.8, 1.9, 1.9, 1.9, 1.7, 1.7, 1.6, 1.3, 0.8, 0.9, 0.8, 0.6, 0.7, 0.6],
+    [0.4, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 0.6, 1.0, 1.6, 1.8, 1.9, 1.9, 2.0, 2.0, 1.9, 1.7, 1.4, 1.0, 0.8, 0.7, 0.7, 0.6, 0.5],
+    [0.5, 0.4, 0.4, 0.5, 0.4, 0.4, 0.4, 0.7, 1.0, 1.3, 1.5, 1.6, 1.5, 1.6, 1.6, 1.5, 1.5, 1.1, 0.9, 0.7, 0.7, 0.4, 0.5, 0.6],
+    [0.4, 0.3, 0.3, 0.4, 0.3, 0.3, 0.3, 0.5, 0.8, 1.2, 1.4, 1.5, 1.5, 1.5, 1.6, 1.5, 1.5, 1.3, 1.0, 0.7, 0.7, 0.5, 0.5, 0.5],
+    [0.4, 0.4, 0.2, 0.2, 0.3, 0.4, 0.3, 0.5, 0.9, 1.2, 1.4, 1.5, 1.5, 1.5, 1.5, 1.6, 1.3, 1.3, 0.9, 0.7, 0.6, 0.6, 0.5, 0.4]
+  ],
+  hP: [
+    [931.6, 931.1, 930.6, 930.4, 930.3, 930.6, 931.1, 931.7, 932.2, 932.6, 932.6, 932.3, 931.6, 930.8, 930.0, 929.2, 928.7, 928.6, 928.9, 929.6, 930.3, 931.1, 931.7, 931.9],
+    [932.5, 932.1, 931.7, 931.4, 931.4, 931.7, 932.0, 932.6, 933.2, 933.5, 933.5, 933.2, 932.7, 931.9, 931.0, 930.2, 929.6, 929.5, 929.8, 930.4, 931.2, 932.0, 932.7, 932.9],
+    [932.6, 932.3, 931.9, 931.7, 931.6, 931.8, 932.2, 932.7, 933.4, 933.8, 933.8, 933.5, 932.9, 931.9, 931.0, 930.2, 929.9, 929.9, 930.2, 930.7, 931.4, 932.2, 932.7, 932.8],
+    [932.4, 932.0, 931.7, 931.5, 931.4, 931.5, 932.0, 932.6, 933.2, 933.6, 933.7, 933.2, 932.4, 931.5, 930.6, 929.9, 929.7, 929.9, 930.3, 930.9, 931.5, 932.1, 932.4, 932.5],
+    [934.5, 934.2, 933.8, 933.7, 933.6, 933.9, 934.4, 935.0, 935.6, 936.1, 936.0, 935.6, 934.8, 933.9, 933.0, 932.6, 932.5, 932.7, 933.0, 933.3, 933.9, 934.2, 934.6, 934.6],
+    [935.7, 935.4, 935.1, 934.9, 934.9, 935.1, 935.5, 936.1, 936.9, 937.2, 937.1, 936.7, 935.9, 935.0, 934.1, 933.6, 933.5, 933.7, 934.1, 934.5, 935.0, 935.5, 935.7, 935.7],
+    [936.5, 936.2, 935.8, 935.6, 935.5, 935.7, 936.2, 936.8, 937.5, 937.9, 938.0, 937.6, 936.8, 935.8, 934.9, 934.3, 934.2, 934.4, 934.8, 935.0, 935.7, 936.0, 936.5, 936.6],
+    [935.1, 934.7, 934.4, 934.2, 934.2, 934.4, 935.0, 935.6, 936.1, 936.5, 936.5, 936.0, 935.1, 934.2, 933.2, 932.7, 932.5, 932.7, 933.1, 933.5, 934.1, 934.6, 934.9, 935.1],
+    [932.9, 932.5, 932.0, 931.9, 931.9, 932.3, 933.1, 933.8, 934.3, 934.4, 934.3, 933.8, 932.9, 931.9, 930.9, 930.2, 930.0, 930.2, 930.6, 931.2, 931.8, 932.4, 932.8, 933.0],
+    [931.3, 930.9, 930.4, 930.3, 930.4, 930.8, 931.3, 932.0, 932.6, 932.8, 932.7, 932.3, 931.4, 930.3, 929.3, 928.6, 928.3, 928.5, 929.1, 929.9, 930.6, 931.3, 931.8, 931.7],
+    [930.9, 930.4, 929.9, 929.7, 929.9, 930.3, 930.8, 931.4, 931.9, 932.2, 932.0, 931.6, 930.9, 930.0, 929.0, 928.3, 928.0, 928.1, 928.6, 929.3, 930.2, 930.9, 931.3, 931.3],
+    [930.9, 930.4, 930.0, 929.9, 930.0, 930.3, 930.9, 931.5, 931.9, 932.2, 932.2, 931.8, 931.1, 930.3, 929.4, 928.7, 928.2, 928.2, 928.6, 929.3, 930.1, 930.8, 931.3, 931.4]
+  ],
+  hChuva: [
+    [15.9, 15.1, 4.5, 2.9, 1.1, 1.5, 3.7, 6.3, 5.2, 2.5, 10.6, 8.9, 10.8, 5.3, 8.9, 10.9, 21.9, 42.5, 17.7, 14.5, 11.2, 18.6, 19.1, 8.1],
+    [10.2, 6.7, 5.4, 5.3, 5.0, 3.4, 1.8, 4.5, 2.0, 0.3, 0.3, 0.5, 0.6, 5.5, 18.7, 36.6, 23.2, 9.6, 3.5, 6.2, 31.4, 22.7, 16.9, 16.2],
+    [1.8, 4.3, 4.7, 3.1, 14.4, 10.5, 1.8, 0.5, 2.0, 0.7, 6.1, 3.9, 8.8, 8.9, 9.2, 7.5, 23.0, 14.7, 3.7, 3.1, 3.5, 4.5, 5.4, 7.3],
+    [0.7, 1.0, 1.8, 3.3, 8.7, 3.9, 4.5, 1.4, 2.9, 0.1, 0.4, 0.2, 0.7, 0.4, 13.7, 6.0, 10.9, 35.8, 14.5, 15.0, 7.7, 2.0, 6.1, 10.2],
+    [0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 21.8, 2.9, 0.2, 0.0, 0.0, 0.0],
+    [1.9, 2.4, 0.1, 0.0, 3.0, 0.8, 0.3, 0.1, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.6, 0.2, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.3, 0.1, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 1.6, 2.0, 0.4],
+    [0.1, 0.9, 0.1, 0.0, 1.6, 0.0, 0.2, 0.1, 0.4, 0.0, 0.1, 0.3, 0.1, 4.8, 2.4, 0.9, 0.7, 0.7, 4.2, 0.4, 0.0, 0.5, 0.1, 0.1],
+    [8.3, 1.3, 4.1, 0.5, 14.9, 11.3, 3.3, 1.9, 0.6, 3.7, 3.0, 3.7, 11.2, 6.6, 4.1, 19.9, 16.4, 3.0, 7.5, 12.9, 17.7, 12.5, 3.5, 7.5],
+    [19.9, 20.6, 14.4, 37.3, 6.5, 2.1, 4.9, 3.2, 0.8, 1.2, 1.7, 0.9, 1.6, 3.1, 1.6, 14.7, 22.9, 50.0, 36.3, 22.1, 11.0, 11.8, 4.6, 6.3],
+    [2.1, 6.5, 11.0, 6.9, 13.1, 11.0, 8.7, 7.6, 6.0, 6.6, 4.2, 3.0, 2.8, 4.7, 4.9, 7.3, 25.1, 12.2, 23.9, 8.0, 13.6, 13.3, 15.1, 2.9]
+  ],
+  extremos: { tmax: 41.1, tmin: 6.2, chuvaDia: 91.2 },
+  periodo: '2023–2025', estacao: 'A002 Goiânia'
 };
-// pressão pela atmosfera padrão a 749 m de altitude (≈ 926 hPa)
-const PRESSAO_LOCAL = 1013.25 * Math.pow(1 - 2.25577e-5 * 749, 5.25588);
+// pressão média medida na estação (727 m de altitude), média dos 12 meses
+const PRESSAO_LOCAL = NORMAIS.pressao.reduce((x, y) => x + y, 0) / 12;
+// valor do ciclo horário no instante h (horas decimais), interpolando entre as horas
+const cicloHora = (v, h) => { const i = Math.floor(h) % 24, f = h - Math.floor(h); return v[i] * (1 - f) + v[(i + 1) % 24] * f; };
+// a média das horas suaviza os extremos; o formato do ciclo médio é esticado até a máxima e a mínima diárias médias
+const cicloTemp = (m, h) => { const v = NORMAIS.hT[m], lo = Math.min(...v), hi = Math.max(...v); return NORMAIS.tmin[m] + (cicloHora(v, h) - lo) / (hi - lo) * (NORMAIS.tmax[m] - NORMAIS.tmin[m]); };
 const LAT = -16.68 * Math.PI / 180;
 function radiacaoCeuLimpo(t) {           // W/m², céu limpo, latitude de Goiânia
   const doy = diaDoAno(t), h = horaDe(t);
@@ -344,29 +439,43 @@ function radiacaoCeuLimpo(t) {           // W/m², céu limpo, latitude de Goiâ
   return s > 0 ? 1080 * Math.pow(s, 1.2) : 0;
 }
 
+// razão média entre a radiação medida (INMET) e a de céu limpo, por mês: calibra a nebulosidade do simulador
+const KT_MES = NORMAIS.rad.map((r, m) => {
+  const t0 = Date.UTC(2025, m, 15); let cs = 0;
+  for (let t = t0; t < t0 + DIA; t += 10 * MIN) cs += radiacaoCeuLimpo(t) * 600 / 1e6;
+  return Math.min(0.95, r / cs);
+});
 class Clima {
-  constructor(seed) { this.r = rng(seed); this.dia = -1; this.anom = 0; this.chuvoso = false; this.nuvemDia = 0.85; this.Ta = 24; this.UR = 70; this.rad = 0; this.chuva = 0; this.vento = 1; this.pressao = 926; this.nuvem = 0.85; }
+  constructor(seed) { this.r = rng(seed); this.dia = -1; this.anom = 0; this.chuvoso = false; this.nuvemDia = 0.85; this.Ta = 24; this.UR = 70; this.rad = 0; this.chuva = 0; this.vento = 1; this.pressao = PRESSAO_LOCAL; this.nuvem = 0.85; this.ruidoVento = 0; }
   passo(t, ctl) {
     const m = mesDe(t), h = horaDe(t), dia = Math.floor(t / DIA);
-    if (dia !== this.dia) {                // sorteios diários: anomalia térmica, chuva, nebulosidade
+    if (dia !== this.dia) {                // sorteios diários com as estatísticas do INMET A002 2023-2025
       this.dia = dia;
-      const seco = NORMAIS.pchuva[m] < 0.2;
-      this.anom = 0.7 * this.anom + gauss(this.r) * (seco ? 1.6 : 1.0);
-      this.chuvoso = this.r() < NORMAIS.pchuva[m];
-      this.nuvemDia = this.chuvoso ? 0.35 + 0.25 * this.r() : (seco ? 0.86 + 0.12 * this.r() : 0.62 + 0.3 * this.r());
-      this.inicioChuva = 13 + 4 * this.r();
-      this.mmDia = NORMAIS.chuva[m] / (30 * Math.max(0.03, NORMAIS.pchuva[m]));
+      // anomalia da média diária: AR(1) com o desvio-padrão e a autocorrelação medidos
+      const rho = NORMAIS.anomAR1;
+      this.anom = rho * this.anom + Math.sqrt(1 - rho * rho) * NORMAIS.anomDP[m] * gauss(this.r);
+      const p = NORMAIS.pchuva[m];
+      this.chuvoso = this.r() < p;
+      // nebulosidade: média do mês igual à razão medida/céu limpo; dia de chuva com 65% dessa luz
+      const kt = KT_MES[m], fSeco = p < 1 ? (1 - 0.65 * p) / (1 - p) : 1;
+      this.nuvemDia = clamp(kt * (this.chuvoso ? 0.65 : fSeco) * (1 + 0.12 * gauss(this.r)), 0.1, 1);
+      // hora de início da chuva sorteada pela distribuição horária da chuva no mês (linha h = chuva entre h-1 e h)
+      const pesos = NORMAIS.hChuva[m], tot = pesos.reduce((x, y) => x + y, 0);
+      let u = this.r() * tot, hh = 0; while (hh < 23 && u > pesos[hh]) { u -= pesos[hh]; hh++; }
+      this.inicioChuva = (hh + 23) % 24 + this.r();
+      this.mmDia = p > 0 ? NORMAIS.chuva[m] / (30.4 * p) : 0;
     }
-    const chovendoAgora = (ctl.chuvaForcada || (this.chuvoso && h >= this.inicioChuva && h < this.inicioChuva + 3));
+    const dh = (h - this.inicioChuva + 24) % 24;
+    const chovendoAgora = (ctl.chuvaForcada || (this.chuvoso && dh < 3));
     this.chuva = chovendoAgora ? (ctl.chuvaForcada ? 12 : this.mmDia / 3) : 0;
     this.nuvem = ctl.nuvemManual != null ? ctl.nuvemManual : (chovendoAgora ? 0.25 : this.nuvemDia);
     this.rad = radiacaoCeuLimpo(t) * this.nuvem;
-    // ciclo diário entre a mínima e a máxima normais do mês (INMET), mais a anomalia do dia
-    const meio = (NORMAIS.tmax[m] + NORMAIS.tmin[m]) / 2, amp = (NORMAIS.tmax[m] - NORMAIS.tmin[m]) / 2;
-    this.Ta = meio + this.anom + ctl.deltaTempAr + amp * Math.sin(2 * Math.PI * (h - 9) / 24) - (chovendoAgora ? 2.5 : 0);
-    this.UR = clamp(NORMAIS.ur[m] + 17 * Math.cos(2 * Math.PI * (h - 5) / 24) + (chovendoAgora ? 25 : 0) - ctl.deltaTempAr * 1.2, 15, 100);
-    this.vento = Math.max(0, 1.1 + 1.6 * Math.max(0, Math.sin(2 * Math.PI * (h - 8) / 24)) + 0.4 * gauss(this.r) * 0.5 + ctl.ventoExtra + (chovendoAgora ? 2 : 0));
-    this.pressao = PRESSAO_LOCAL + 1.2 * Math.cos(2 * Math.PI * (h - 10) / 12) + ctl.deltaTempAr * -0.3;
+    // ciclo horário médio do mês (INMET), mais a anomalia do dia; a chuva esfria o ar
+    this.Ta = cicloTemp(m, h) + this.anom + ctl.deltaTempAr - (chovendoAgora ? 2.5 : 0);
+    this.UR = clamp(cicloHora(NORMAIS.hUR[m], h) - 2.5 * this.anom + (chovendoAgora ? 20 : 0) - ctl.deltaTempAr * 1.2, 15, 100);
+    this.ruidoVento = 0.9 * (this.ruidoVento || 0) + 0.1 * gauss(this.r);
+    this.vento = Math.max(0, cicloHora(NORMAIS.hV[m], h) * (1 + 0.8 * this.ruidoVento) + ctl.ventoExtra + (chovendoAgora ? 2 : 0));
+    this.pressao = cicloHora(NORMAIS.hP[m], h) - ctl.deltaTempAr * 0.3;
   }
 }
 
@@ -842,7 +951,7 @@ function calibrarCrescimento(biometrias, amb, refeicoes, N) {
   }
   return { alfa: melhor.alfa, rmse: Math.sqrt(melhor.erro / (biometrias.length - 1)), n: biometrias.length };
 }
-// projeção até o abate com as normais do INMET (água ≈ média do ar, Rotta et al. 2023, mais o desvio atual medido)
+// projeção até o abate com as médias do INMET A002 2023-2025 (água ≈ média do ar, Rotta et al. 2023, mais o desvio atual medido)
 function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240) {
   const pts = [{ t: t0, W: W0 }]; let W = W0, t = t0, abate = null;
   for (let d = 1; d <= diasMax; d++) {
@@ -958,7 +1067,7 @@ function avaliarAlertas(L, prev, extras) {
   if (ph != null) alerta('ph', 'ph', ph, vir(ph, 2), { critico: 'pH crítico', atencao: 'pH fora da faixa ideal' });
   if (uia != null) alerta('nh3', 'nh3', uia, `${vir(uia, 3)} mg/L de NH₃-N`, { critico: 'Amônia tóxica alta', atencao: 'Amônia tóxica acima do ideal' });
   if (extras.divergencia) a.push({ id: 'div', nivel: 'atencao', titulo: 'Leitura fora do esperado', texto: extras.divergencia });
-  if (extras.anomaliaAr != null && extras.anomaliaAr < -4) a.push({ id: 'frio', nivel: 'atencao', titulo: 'Frente fria', texto: `Ar ${Math.abs(extras.anomaliaAr).toFixed(1)} °C abaixo da normal de ${MESES[extras.mes]} (INMET). A água esfria e a frente fria pode misturar a coluna d'água (Araújo et al., 2017).` });
+  if (extras.anomaliaAr != null && extras.anomaliaAr < -4) a.push({ id: 'frio', nivel: 'atencao', titulo: 'Frente fria', texto: `Ar ${Math.abs(extras.anomaliaAr).toFixed(1)} °C abaixo da média de ${MESES[extras.mes]} (INMET 2023–2025). A água esfria e a frente fria pode misturar a coluna d'água (Araújo et al., 2017).` });
   if (extras.falhaAerador) a.push({ id: 'aer', nivel: 'critico', titulo: 'Aerador sem efeito', texto: 'O aerador está ligado, mas o OD continua caindo. Verificar o equipamento.' });
   return a;
 }
@@ -1205,7 +1314,7 @@ const REFS = {
   araujo2017: { c: 'Araújo et al. (2017)', t: 'ARAÚJO, C. A. S. et al. Effects of atmospheric cold fronts on stratification and water quality of a tropical reservoir: implications for aquaculture. Aquaculture Environment Interactions, v. 9, p. 385–403, 2017.', doi: '10.3354/aei00240', esp: false },
   benson1984: { c: 'Benson e Krause (1984)', t: 'BENSON, B. B.; KRAUSE, D. The concentration and isotopic fractionation of oxygen dissolved in freshwater and seawater in equilibrium with the atmosphere. Limnology and Oceanography, v. 29, n. 3, p. 620–632, 1984.', doi: '10.4319/lo.1984.29.3.0620', esp: false },
   emerson1975: { c: 'Emerson et al. (1975)', t: 'EMERSON, K. et al. Aqueous ammonia equilibrium calculations: effect of pH and temperature. Journal of the Fisheries Research Board of Canada, v. 32, p. 2379–2383, 1975.', doi: '10.1139/f75-274', esp: false },
-  inmet: { c: 'INMET (normais 1991–2020)', t: 'INMET. Normais climatológicas do Brasil 1991–2020 e balanços mensais da estação de Goiânia (GO). Instituto Nacional de Meteorologia.', url: 'https://portal.inmet.gov.br', esp: false },
+  inmet: { c: 'INMET (A002 Goiânia, 2023–2025)', t: 'INMET – Instituto Nacional de Meteorologia. Banco de Dados Meteorológicos: dados históricos horários da estação automática A002 Goiânia (GO), 01/01/2023 a 31/12/2025 (arquivos anuais 2023, 2024 e 2025). Médias, ciclos horários e desvios calculados pelo protótipo.', url: 'https://portal.inmet.gov.br/dadoshistoricos', esp: false },
   openmeteo: { c: 'Open-Meteo', t: 'OPEN-METEO. Weather Forecast API. Previsão diária para Goiânia (−16,68; −49,25).', url: 'https://open-meteo.com/en/docs', esp: false },
 };
 const citar = ks => ks.map(k => REFS[k] ? REFS[k].c : k).join('; ');
@@ -1231,16 +1340,19 @@ const ITENS_FONTES = [
   ['Consumo de oxigênio dos peixes por peso e temperatura', 'tabela interpolada', ['kimjo1999'], 'especie'],
   ['Estrutura do balanço de oxigênio (fotossíntese, respiração, troca com o ar, aerador) e projeção noturna', 'modelo do viveiro e da previsão', ['boyd1978', 'romaire1979'], 'geral'],
   ['Saturação de oxigênio pela temperatura e pela pressão', 'fórmula', ['benson1984'], 'geral'],
-  ['Pressão local de 926 hPa (749 m de altitude)', 'atmosfera padrão', [], 'derivado'],
+  ['Pressão atmosférica local (930 a 936 hPa conforme o mês, com o ciclo horário)', 'saturação de oxigênio e clima simulado', ['inmet'], 'geral'],
   ['Eficiência do aerador (3,0 kg O₂/kWh) e potência de 0,75 kW (1 cv)', 'kLa ≈ 0,21 por hora', ['tucker2005'], 'derivado'],
-  ['Clima mensal de Goiânia (máxima, mínima, média, chuva)', 'normais; meses sem boletim derivados da média', ['inmet'], 'geral'],
+  ['Clima mensal de Goiânia (máxima, mínima, média, chuva, dias com chuva, umidade, vento, radiação)', 'médias da estação A002 de 2023 a 2025; tabela na aba Previsão', ['inmet'], 'geral'],
+  ['Ciclo de cada hora do dia (temperatura, umidade, vento, pressão) e horário típico da chuva', 'clima simulado hora a hora', ['inmet'], 'geral'],
+  ['Variação de um dia para o outro (desvio-padrão por mês e correlação de 0,69 entre dias seguidos)', 'sorteio das ondas de calor e de frio do simulador', ['inmet'], 'derivado'],
+  ['Nebulosidade do simulador calibrada pela radiação medida (razão entre a radiação do INMET e a de céu limpo)', 'radiação do clima simulado', ['inmet'], 'derivado'],
   ['Temperatura média diária da água ≈ média do ar', 'aquecimento da água', ['rotta2023'], 'especie'],
   ['Previsão do tempo real de 7 dias', 'máxima, mínima, chuva, radiação e vento', ['openmeteo'], 'geral'],
   ['Frente fria mistura a água e baixa OD e pH', 'consequência na aba Previsão', ['araujo2017'], 'geral'],
   ['Dia nublado reduz o OD da noite seguinte', 'consequência na aba Previsão', ['romaire1979', 'tucker2005', 'boyd2018a'], 'geral'],
   ['Limiares de frente fria (queda de 5 °C na máxima, 20 mm de chuva, vento de 8 m/s) e de estratificação (32 °C e vento abaixo de 3 m/s)', 'limiar do protótipo', [], 'sem'],
   ['Coeficientes do viveiro simulado (fotossíntese 2,3; respiração da água 0,22 mg/L/h; θ 1,036 e 1,07; troca com o ar 0,03 + 0,015·vento)', 'calibração do simulador', [], 'sem'],
-  ['Constante de tempo da água (≈ 10 h), umidade relativa e chance de chuva por mês', 'calibração do simulador', [], 'sem'],
+  ['Constante de tempo da água (≈ 10 h), duração de 3 h de cada chuva e efeito da chuva no ar (−2,5 °C, +20% de umidade)', 'calibração do simulador', [], 'sem'],
   ['pH e amônia total do viveiro simulado (pH ≈ 7,4 + 0,9·log₂ da saturação de OD)', 'calibração do simulador', [], 'sem'],
   ['Taxas de mortalidade do simulador (os limiares de OD 1,0 mg/L e 11 °C têm fonte)', 'calibração do simulador', ['yi1998', 'nobrega2020'], 'sem'],
   ['Lote de 4.000 peixes em 1.000 m², peso de abate de 800 g, biometria semanal', 'cenário da apresentação', [], 'sem'],
@@ -1273,7 +1385,7 @@ class Barramento {
   constructor() {
     this.id = Math.random().toString(36).slice(2); this.vistos = new Set(); this.ouvintes = [];
     this.mqtt = null; this.mqttOk = false; this.info = null; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO;
-    this.fila = []; this.aoMudarRede = () => {}; this.ultEspelho = 0;
+    this.fila = []; this.aoMudarRede = () => {}; this.aoConectar = []; this.ultEspelho = 0;
     try { this.bc = new BroadcastChannel('gemeo-viveiro1'); this.bc.onmessage = e => this.chegou(e.data); } catch (e) { this.bc = null; }
     window.addEventListener('storage', e => { if (e.key === 'gemeo-viveiro1' && e.newValue) { try { this.chegou(JSON.parse(e.newValue)); } catch (_) {} } });
     this.pronto = this.iniciarMqtt().catch(() => {}).then(() => { const f = this.fila; this.fila = null; if (this.mqttOk) for (const m of f) this.publicar(m); });
@@ -1310,10 +1422,16 @@ class Barramento {
     if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
     this.prefixo = prefixo; this.mqttOk = false; this.erroRede = null;
     await new Promise(ok => {
-      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 2000, keepalive: 30, connectTimeout: 6000, ...extra });
-      this.mqtt = c; const fim = setTimeout(ok, 6000);
-      c.on('connect', () => { this.mqttOk = true; this.erroRede = null; c.subscribe(this.topicoAbas); clearTimeout(fim); ok(); this.aoMudarRede(); });
+      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 1500, keepalive: 20, connectTimeout: 10000, clean: true, ...extra });
+      this.mqtt = c; const fim = setTimeout(ok, 10000);
+      c.on('connect', () => {
+        this.mqttOk = true; this.erroRede = null;
+        c.subscribe(this.topicoAbas, { qos: 1 }, () => { for (const f of this.aoConectar) { try { f(); } catch (_) {} } });
+        clearTimeout(fim); ok(); this.aoMudarRede();
+      });
+      c.on('reconnect', () => this.aoMudarRede());
       c.on('error', e => { this.erroRede = e && e.message; this.aoMudarRede(); });
+      c.on('offline', () => { this.mqttOk = false; this.aoMudarRede(); });
       c.on('close', () => { if (this.mqttOk) { this.mqttOk = false; this.aoMudarRede(); } });
       c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
     });
@@ -1324,7 +1442,9 @@ class Barramento {
     if (this.modoRede === 'local') return `http://${this.info.ips[0]}:${this.info.porta}/simulador.html`;
     return this.cfg ? base + 'simulador.html#mqtt=' + codificar(this.cfg) : '';
   }
-  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m)); } catch (_) {} }
+  // ações do controle remoto vão com QoS 1 (entrega garantida); o resto é estado periódico, QoS 0
+  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m), { qos: m.tipo === 'acao' ? 1 : 0 }); } catch (_) {} }
+  textoRede() { return this.mqttOk ? this.descricaoRede() + ' conectado' : this.erroRede ? this.descricaoRede() + ': sem conexão, tentando de novo' : this.descricaoRede() + ': conectando...'; }
   // espelha as leituras nos tópicos do contrato (…/agua/od etc.), para ver num cliente MQTT
   espelhar(leituras, t) {
     if (!this.mqttOk || !leituras || Date.now() - this.ultEspelho < 1000) return; this.ultEspelho = Date.now();
@@ -1474,7 +1594,66 @@ const SENSORES = [
   { k: 'pH', nome: 'pH', un: '', min: 5, max: 10, passo: 0.05, d: 2 },
   { k: 'TAN', nome: 'Amônia total (NAT)', un: 'mg/L', min: 0, max: 6, passo: 0.05, d: 2 }
 ];
-function montarControles(raiz, obterMotor, aoMudar) {
+/* Cada mexida nos controles vira uma ação {a, ...}. Na aba dona da simulação a ação é aplicada direto;
+   no celular (controle remoto) ela é enviada ao dono, que aplica e devolve o estado. As ações são
+   absolutas (ex.: "pausado = true", não "inverter"), então repetir uma ação não muda o resultado. */
+function aplicarAcao(motor, ac) {
+  const s = motor.sim;
+  switch (ac.a) {
+    case 'vel': motor.vel = +ac.v; break;
+    case 'pausa': motor.pausado = !!ac.v; break;
+    case 'evento': { const e = EVENTOS.find(x => x.id === ac.id); if (e) e.aplicar(s); break; }
+    case 'sensor': if (SENSORES.some(x => x.k === ac.k)) { s.v[ac.k] = +ac.v; if (ac.trava) s.ctl.travas[ac.k] = +ac.v; } break;
+    case 'trava': if (ac.on) s.ctl.travas[ac.k] = +ac.v; else delete s.ctl.travas[ac.k]; break;
+    case 'dta': s.ctl.deltaTempAr = +ac.v; break;
+    case 'nuvem': s.ctl.nuvemManual = ac.v == null ? null : +ac.v; break;
+    case 'vento': s.ctl.ventoExtra = +ac.v; break;
+    case 'chuva': s.ctl.chuvaForcada = !!ac.on; break;
+    case 'net': if (s.ctl.internet !== !!ac.on) { s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.internet'); s.ctl.internet = !!ac.on; s.registrar(ac.on ? 'Internet do ESP32 restabelecida' : 'Internet do ESP32 desligada'); } break;
+    case 'falha': s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.falhaAerador'); s.ctl.falhaAerador = !!ac.on; break;
+    case 'manejo': { const m = ac.on ? 'gemeo' : 'tradicional'; if (s.ctl.manejo !== m) { s.ctl.manejo = m; s.registrar(ac.on ? 'Viveiro passa a seguir o gêmeo' : 'Viveiro passa ao manejo tradicional'); } break; }
+    case 'biometria': { const b = s.biometria(); s.registrar(`Biometria: peso médio ${fmt(b.W, 1)} g`); break; }
+  }
+}
+// executor da aba dona: aplica a ação; "reiniciar" troca o motor (trocar(novoMotor))
+function executorLocal(obterMotor, trocar, depois) {
+  return ac => {
+    if (ac.a === 'reiniciar') { if (CENARIOS[ac.cen]) trocar(new Motor(new Simulador(ac.cen), obterMotor().vel)); }
+    else aplicarAcao(obterMotor(), ac);
+    depois(ac);
+  };
+}
+// estado compacto que o dono envia ao celular (só o que a tela de controles mostra)
+function estadoRemoto(motor) {
+  const s = motor.sim, v = s.v, c = s.clima;
+  return { tipo: 'estado', t: s.t, cenario: s.cenario, vel: motor.vel, pausado: motor.pausado,
+    v: { Tw: v.Tw, OD: v.OD, pH: v.pH, TAN: v.TAN, aerador: v.aerador, W: v.W, N: v.N },
+    clima: { Ta: c.Ta, UR: c.UR, rad: c.rad, nuvem: c.nuvem }, ctl: s.ctl,
+    temporarios: s.temporarios.map(e => ({ chave: e.chave, rotulo: e.rotulo })), eventos: s.eventos.slice(-12),
+    biometrias: s.biometrias.slice(-1), origemAerador: s.origemAerador, comp: s.comparacao(), log: motor.logMsgs.slice(-40) };
+}
+// "motor" de leitura montado com o estado recebido, para reaproveitar atualizarControles no celular
+function motorDeEstado(e) {
+  return { vel: e.vel, pausado: e.pausado, logMsgs: e.log || [],
+    sim: { t: e.t, cenario: e.cenario, v: e.v, clima: e.clima, ctl: e.ctl, temporarios: e.temporarios, eventos: e.eventos, biometrias: e.biometrias, origemAerador: e.origemAerador, comparacao: () => e.comp } };
+}
+// a aba dona atende os controles remotos: responde a quem procura, aplica as ações e manda o estado
+function servirRemotos(bus, obterMotor, executar) {
+  const remotos = new Map(); let ultEnvio = 0;
+  const enviarEstado = (forcar) => {
+    const agora = Date.now();
+    for (const [id, visto] of remotos) if (agora - visto > 15000) remotos.delete(id);
+    if (!remotos.size || !obterMotor() || (!forcar && agora - ultEnvio < 500)) return;
+    ultEnvio = agora; bus.enviar(estadoRemoto(obterMotor()));
+  };
+  bus.on(m => {
+    if (!obterMotor()) return;
+    if (m.tipo === 'procurar-dono' || m.tipo === 'oi-remoto') { remotos.set(m.de, Date.now()); if (m.tipo === 'procurar-dono') bus.enviar({ tipo: 'dono', para: m.de }); enviarEstado(true); }
+    else if (m.tipo === 'acao' && m.acao) { remotos.set(m.de, Date.now()); executar(m.acao); enviarEstado(true); }
+  });
+  return { enviarEstado, remotos };
+}
+function montarControles(raiz, obterMotor, executar) {
   raiz.innerHTML = `
   <section class="card s12">
     <header><h2>Tempo e cenário</h2><span class="sutil" id="c-relogio"></span></header>
@@ -1527,28 +1706,34 @@ function montarControles(raiz, obterMotor, aoMudar) {
     <header><h2>Eventos no viveiro</h2></header>
     <ul class="log" id="c-eventos"></ul>
   </section>`;
-  const M = obterMotor;
-  raiz.querySelectorAll('[data-vel]').forEach(b => b.onclick = () => { M().vel = +b.dataset.vel; aoMudar(); });
-  $('#c-pausa', raiz).onclick = () => { M().pausado = !M().pausado; aoMudar(); };
-  $('#c-reiniciar', raiz).onclick = () => { aoMudar('reiniciar', $('#c-cenario', raiz).value); };
-  raiz.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EVENTOS.find(e => e.id === b.dataset.ev).aplicar(M().sim); aoMudar(); });
+  const M = obterMotor, fazer = executar;
+  raiz.querySelectorAll('[data-vel]').forEach(b => b.onclick = () => fazer({ a: 'vel', v: +b.dataset.vel }));
+  $('#c-pausa', raiz).onclick = () => fazer({ a: 'pausa', v: !M().pausado });
+  $('#c-reiniciar', raiz).onclick = () => fazer({ a: 'reiniciar', cen: $('#c-cenario', raiz).value });
+  raiz.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => fazer({ a: 'evento', id: b.dataset.ev }));
+  // sliders: no máximo uma ação a cada 120 ms enquanto arrasta, e sempre a última ao soltar
+  const limitado = (fn) => { let ult = 0, tmr = null; return (final) => { clearTimeout(tmr); const agora = Date.now(); if (final || agora - ult > 120) { ult = agora; fn(); } else tmr = setTimeout(() => { ult = Date.now(); fn(); }, 120); }; };
   for (const x of SENSORES) {
     const sl = $('#c-s-' + x.k, raiz), tr = $('#c-t-' + x.k, raiz);
     sl.addEventListener('pointerdown', () => sl.dataset.mexendo = '1');
     window.addEventListener('pointerup', () => delete sl.dataset.mexendo);
-    sl.oninput = () => { const v = +sl.value, s = M().sim; s.v[x.k] = v; if (tr.checked) s.ctl.travas[x.k] = v; $('#c-o-' + x.k, raiz).textContent = fmt(v, x.d) + ' ' + x.un; };
-    tr.onchange = () => { const s = M().sim; if (tr.checked) s.ctl.travas[x.k] = +sl.value; else delete s.ctl.travas[x.k]; };
+    const mandar = limitado(() => fazer({ a: 'sensor', k: x.k, v: +sl.value, trava: tr.checked }));
+    sl.oninput = () => { $('#c-o-' + x.k, raiz).textContent = fmt(+sl.value, x.d) + ' ' + x.un; mandar(false); };
+    sl.onchange = () => mandar(true);
+    tr.onchange = () => fazer({ a: 'trava', k: x.k, on: tr.checked, v: +sl.value });
   }
-  const dta = $('#c-dta', raiz); dta.oninput = () => { M().sim.ctl.deltaTempAr = +dta.value; aoMudar(); };
-  const nv = $('#c-nuvem', raiz), na = $('#c-nuvem-auto', raiz);
-  nv.oninput = () => { na.checked = false; M().sim.ctl.nuvemManual = +nv.value; aoMudar(); };
-  na.onchange = () => { M().sim.ctl.nuvemManual = na.checked ? null : +nv.value; aoMudar(); };
-  const ve = $('#c-vento', raiz); ve.oninput = () => { M().sim.ctl.ventoExtra = +ve.value; aoMudar(); };
-  $('#c-chuva', raiz).onchange = e => { M().sim.ctl.chuvaForcada = e.target.checked; aoMudar(); };
-  $('#c-net', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.internet'); s.ctl.internet = e.target.checked; s.registrar(e.target.checked ? 'Internet do ESP32 restabelecida' : 'Internet do ESP32 desligada'); aoMudar(); };
-  $('#c-falha', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.falhaAerador'); s.ctl.falhaAerador = e.target.checked; aoMudar(); };
-  $('#c-manejo', raiz).onchange = e => { M().sim.ctl.manejo = e.target.checked ? 'gemeo' : 'tradicional'; M().sim.registrar(e.target.checked ? 'Viveiro passa a seguir o gêmeo' : 'Viveiro passa ao manejo tradicional'); aoMudar(); };
-  $('#c-biometria', raiz).onclick = () => { const b = M().sim.biometria(); M().sim.registrar(`Biometria: peso médio ${fmt(b.W, 1)} g`); aoMudar(); };
+  const dta = $('#c-dta', raiz), mDta = limitado(() => fazer({ a: 'dta', v: +dta.value }));
+  dta.oninput = () => mDta(false); dta.onchange = () => mDta(true);
+  const nv = $('#c-nuvem', raiz), na = $('#c-nuvem-auto', raiz), mNv = limitado(() => fazer({ a: 'nuvem', v: +nv.value }));
+  nv.oninput = () => { na.checked = false; mNv(false); }; nv.onchange = () => mNv(true);
+  na.onchange = () => fazer({ a: 'nuvem', v: na.checked ? null : +nv.value });
+  const ve = $('#c-vento', raiz), mVe = limitado(() => fazer({ a: 'vento', v: +ve.value }));
+  ve.oninput = () => mVe(false); ve.onchange = () => mVe(true);
+  $('#c-chuva', raiz).onchange = e => fazer({ a: 'chuva', on: e.target.checked });
+  $('#c-net', raiz).onchange = e => fazer({ a: 'net', on: e.target.checked });
+  $('#c-falha', raiz).onchange = e => fazer({ a: 'falha', on: e.target.checked });
+  $('#c-manejo', raiz).onchange = e => fazer({ a: 'manejo', on: e.target.checked });
+  $('#c-biometria', raiz).onclick = () => fazer({ a: 'biometria' });
 }
 function atualizarControles(raiz, motor) {
   if (!raiz.firstElementChild) return;
@@ -1614,9 +1799,14 @@ function iniciarPainel() {
     const sim = snapshot ? Simulador.restaurar(snapshot.estado) : new Simulador(gemeo.cenario || 'verao');
     est.motor = new Motor(sim, snapshot ? snapshot.vel : est.vel); est.modo = 'interno';
     gemeo.sincronizar(est.motor.sync()); sim.gemeoAtivo = true; sim.ultimoComando = sim.t;
-    montarControles(ctlInt, () => est.motor, (acao, arg) => { if (acao === 'reiniciar') { est.motor = new Motor(new Simulador(arg), est.motor.vel); gemeo.sincronizar(est.motor.sync()); est.motor.sim.gemeoAtivo = true; } passo(0); });
+    montarControles(ctlInt, () => est.motor, est.executar);
     render();
   }
+  // ações dos controles (gaveta desta aba ou celular): só valem quando a simulação roda aqui
+  est.executar = executorLocal(() => est.motor, novo => { est.motor = novo; gemeo.sincronizar(novo.sync()); novo.sim.gemeoAtivo = true; }, () => passo(0));
+  // o painel é o único dono da simulação: o celular só manda ações e recebe o estado
+  const remoto = servirRemotos(bus, () => est.modo === 'interno' ? est.motor : null, ac => { if (est.modo === 'interno') est.executar(ac); });
+  est.remotos = remoto.remotos;
   function passo(seg) {
     if (est.modo !== 'interno') return;
     est.motor.avancar(seg);
@@ -1624,6 +1814,7 @@ function iniciarPainel() {
     bus.espelhar(m.leituras, m.t);
     tratar(m);
     atualizarControles(ctlInt, est.motor);
+    remoto.enviarEstado(false);
   }
   function tratar(m) {
     if (est.modo === 'interno' && !m.offline) bus.enviar({ ...m, tipo: 'tick-espelho' });
@@ -1635,12 +1826,15 @@ function iniciarPainel() {
     render();
   }
   bus.on(m => {
-    if (m.tipo === 'quem-simula?' && est.modo === 'interno') {
-      bus.enviar({ tipo: 'snapshot', estado: est.motor.sim.snapshot(), vel: est.motor.vel });
-      est.modo = 'externo'; est.motor = null; gav.hidden = true; ctlInt.innerHTML = ''; render();
-    } else if (m.tipo === 'sync') { if (est.modo === 'interno' || (m.para && m.para !== bus.id)) return; est.modo = 'externo'; gemeo.sincronizar(m); est.ultimoTick = Date.now(); render(); }
-    else if (m.tipo === 'tick') { if (est.modo === 'interno') return; if (est.modo !== 'externo') { est.modo = 'externo'; bus.enviar({ tipo: 'pedir-sync' }); return; } tratar(m); }
-    else if (m.tipo === 'tchau' && est.modo === 'externo') { est.ultimoTick = 0; render(); }
+    if (m.tipo === 'sync') { if (est.modo === 'interno' || (m.para && m.para !== bus.id)) return; est.modo = 'externo'; est.fonte = m.de; gemeo.sincronizar(m); est.ultimoTick = Date.now(); render(); }
+    else if (m.tipo === 'tick') {
+      if (est.modo === 'interno') return;
+      // segue um único simulador: ticks de outra origem são ignorados enquanto a fonte atual estiver viva
+      if (est.modo === 'externo' && est.fonte && m.de !== est.fonte) { if (Date.now() - est.ultimoTick > 5000) { est.fonte = null; est.modo = 'procurando'; bus.enviar({ tipo: 'pedir-sync' }); } return; }
+      if (est.modo !== 'externo') { est.modo = 'externo'; bus.enviar({ tipo: 'pedir-sync' }); return; }
+      tratar(m);
+    }
+    else if (m.tipo === 'tchau' && est.modo === 'externo' && m.de === est.fonte) { est.ultimoTick = 0; render(); }
     else if (m.tipo === 'pedir-sync' && est.modo === 'interno') bus.enviar({ ...est.motor.sync(), para: m.de });
     else if (m.tipo === 'pedir-previsao' && est.modo === 'interno') bus.enviar({ tipo: 'previsao', para: m.de, t: est.motor.sim.t, cenario: est.motor.sim.cenario, dias: est.motor.sim.previsaoClima(7) });
   });
@@ -1718,7 +1912,7 @@ function iniciarPainel() {
     const online = g.online && !semSinal;
     $('#chip-disp').className = 'chip ' + (online ? 'ok' : 'crit');
     $('#chip-disp').textContent = online ? 'ESP32 online' : semSinal ? 'Simulador parado' : 'ESP32 offline';
-    $('#chip-fonte').textContent = est.modo === 'interno' ? 'Simulação nesta aba' : est.modo === 'externo' ? (bus.mqttOk ? 'Simulador via ' + bus.descricaoRede() : 'Simulador em outra aba') : 'Procurando simulador';
+    $('#chip-fonte').textContent = est.modo === 'interno' ? 'Simulação nesta aba' + (est.remotos && est.remotos.size ? ' · celular conectado' : '') : est.modo === 'externo' ? (bus.mqttOk ? 'Simulador via ' + bus.descricaoRede() : 'Simulador em outra aba') : 'Procurando simulador';
     $('#chip-aer').className = 'chip ' + (g.modoAeracao === 'AUTO' ? 'ok' : 'warn');
     $('#chip-aer').textContent = 'Aeração ' + (g.modoAeracao === 'AUTO' ? 'automática' : 'manual');
     $('#chip-vel').textContent = est.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === est.vel) || [0, ''])[1];
@@ -1871,38 +2065,75 @@ function tendencia(h, k, d, un) {
 /* ---------------- aba do simulador ---------------- */
 function iniciarSimulador() {
   const bus = new Barramento();
-  let motor = null, ultimoContatoPainel = 0;
+  // papel desta página: 'procurando' → 'remoto' (o painel simula, aqui só se controla) ou 'dono' (sem painel: simula aqui)
+  let papel = 'procurando', motor = null, ultimoContatoPainel = 0, ultEstado = 0, estado = null, seguraAte = 0, loop = null;
   const raiz = $('#controles');
-  const aoMudar = (acao, arg) => {
-    if (acao === 'reiniciar') { motor = new Motor(new Simulador(arg), motor.vel); bus.enviar(motor.sync()); }
-    atualizarControles(raiz, motor); atualizarTopo();
-  };
-  function comecar(sim, vel) {
-    motor = new Motor(sim, vel);
-    montarControles(raiz, () => motor, aoMudar);
+  window.__simPg = () => ({ papel, motor, estado });
+  const nuvem = () => bus.modoRede === 'nuvem';
+
+  // ---- modo dono: a simulação roda nesta página (sem painel aberto)
+  const executarDono = executorLocal(() => motor, novo => { motor = novo; bus.enviar(motor.sync()); }, () => { atualizarControles(raiz, motor); atualizarTopo(); });
+  const servico = servirRemotos(bus, () => papel === 'dono' ? motor : null, ac => executarDono(ac));
+  function virarDono(sim, vel) {
+    if (papel === 'dono') return;
+    papel = 'dono'; motor = new Motor(sim, vel);
+    montarControles(raiz, () => motor, executarDono);
     bus.enviar(motor.sync());
-    setInterval(() => { motor.avancar(0.25); const m = motor.mensagem(); bus.enviar(m); bus.espelhar(m.leituras, m.t); atualizarControles(raiz, motor); atualizarTopo(); }, 250);
+    loop = setInterval(() => { motor.avancar(0.25); const m = motor.mensagem(); bus.enviar(m); bus.espelhar(m.leituras, m.t); atualizarControles(raiz, motor); atualizarTopo(); servico.enviarEstado(false); }, 250);
+  }
+
+  // ---- modo remoto: o painel é o dono; cada mexida vira uma ação enviada a ele
+  function virarRemoto() {
+    if (papel === 'remoto') return;
+    papel = 'remoto';
+    montarControles(raiz, () => motorDeEstado(estado), ac => { seguraAte = Date.now() + 700; bus.enviar({ tipo: 'acao', acao: ac }); });
+    if (estado) desenharRemoto();
+  }
+  function desenharRemoto() { if (Date.now() >= seguraAte) atualizarControles(raiz, motorDeEstado(estado)); atualizarTopo(); }
+
+  function esperando() {
+    if (papel !== 'procurando') return;
+    raiz.innerHTML = `<section class="card s12 espera-painel"><header><h2>Procurando o painel${nuvem() ? ` na sala ${esc(bus.cfg.sala)}` : ''}</h2></header>
+      <p>Este aparelho funciona como controle remoto: a simulação roda no painel, aberto no computador. Deixe o painel aberto e conectado à mesma sala; os controles aparecem aqui sozinhos.</p>
+      <div class="acoes-topo"><button class="btn" id="bt-sim-aqui">Simular só neste aparelho</button></div></section>`;
+    $('#bt-sim-aqui').onclick = () => virarDono(new Simulador('verao'), 5);
   }
   function atualizarTopo() {
-    const s = motor.sim;
+    const fonte = papel === 'dono' ? motor : papel === 'remoto' && estado ? motorDeEstado(estado) : null;
+    const painelOk = papel === 'remoto' ? Date.now() - ultEstado < 5000 : Date.now() - ultimoContatoPainel < 4000;
+    const chP = $('#chip-painel');
+    chP.className = 'chip ' + (painelOk ? 'ok' : papel === 'procurando' ? 'neutro' : 'warn');
+    chP.textContent = papel === 'remoto' ? (painelOk ? 'Controlando o painel' : 'Painel sem resposta') : papel === 'procurando' ? 'Procurando o painel' : painelOk ? 'Painel conectado' : 'Painel não aberto';
+    if (!fonte) { $('#chip-net').hidden = true; $('#chip-vel').hidden = true; return; }
+    const s = fonte.sim; $('#chip-net').hidden = false; $('#chip-vel').hidden = false;
     $('#hora').textContent = fmtHora(s.t); $('#data').textContent = fmtData(s.t) + ' · ' + CENARIOS[s.cenario].nome;
-    const painelOk = Date.now() - ultimoContatoPainel < 4000;
-    $('#chip-painel').className = 'chip ' + (painelOk ? 'ok' : 'warn'); $('#chip-painel').textContent = painelOk ? 'Painel conectado' : 'Painel não aberto';
     $('#chip-net').className = 'chip ' + (s.ctl.internet ? 'ok' : 'crit'); $('#chip-net').textContent = s.ctl.internet ? 'Internet ok' : 'Sem internet';
-    $('#chip-vel').textContent = motor.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === motor.vel) || [0, ''])[1];
+    $('#chip-vel').textContent = fonte.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === fonte.vel) || [0, ''])[1];
   }
+
   bus.on(m => {
-    if (m.tipo === 'snapshot' && !motor) { clearTimeout(espera); comecar(Simulador.restaurar(m.estado), m.vel); }
-    else if (!motor) return;
-    else if (m.tipo === 'pedir-sync') { bus.enviar({ ...motor.sync(), para: m.de }); if (!m.previsao) ultimoContatoPainel = Date.now(); }
+    if (m.para && m.para !== bus.id) return;
+    if ((m.tipo === 'dono' || m.tipo === 'estado') && papel !== 'dono') {
+      ultEstado = Date.now();
+      if (m.tipo === 'estado') { estado = m; virarRemoto(); desenharRemoto(); }
+      return;
+    }
+    if (papel !== 'dono') return;
+    if (m.tipo === 'pedir-sync') { bus.enviar({ ...motor.sync(), para: m.de }); if (!m.previsao) ultimoContatoPainel = Date.now(); }
     else if (m.tipo === 'pedir-previsao') bus.enviar({ tipo: 'previsao', para: m.de, t: motor.sim.t, cenario: motor.sim.cenario, dias: motor.sim.previsaoClima(7) });
     else if (m.tipo === 'comando') { ultimoContatoPainel = Date.now(); motor.comando(m.topico, m.valor); }
   });
   window.addEventListener('beforeunload', () => bus.enviar({ tipo: 'tchau' }));
-  let espera = null;
-  bus.pronto.then(() => { bus.enviar({ tipo: 'quem-simula?' }); espera = setTimeout(() => { if (!motor) comecar(new Simulador('verao'), 5); }, 900); atualizarRede(); });
+  const procurar = () => { if (papel !== 'dono') bus.enviar({ tipo: papel === 'remoto' ? 'oi-remoto' : 'procurar-dono' }); };
+  bus.aoConectar.push(procurar);           // a cada (re)conexão com o broker, procura o painel de novo
+  bus.pronto.then(() => {
+    esperando(); procurar(); atualizarRede(); atualizarTopo();
+    // sem sala na nuvem e sem painel nesta máquina, a página simula sozinha (como antes)
+    setTimeout(() => { if (papel === 'procurando' && !nuvem()) virarDono(new Simulador('verao'), 5); }, 1200);
+  });
+  setInterval(() => { procurar(); if (papel !== 'dono') atualizarTopo(); }, 3000);
   bus.aoMudarRede = () => atualizarRede();
-  function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : 'crit'); ch.textContent = bus.mqttOk ? bus.descricaoRede() + ' conectado' : bus.descricaoRede() + ': sem conexão'; }
+  function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : bus.erroRede ? 'crit' : 'neutro'); ch.textContent = bus.textoRede(); }
 }
 
 /* ---------------- aba Previsão de 7 dias ---------------- */
@@ -2026,6 +2257,15 @@ function iniciarPrevisao(ctx = null) {   // ctx: aba embutida no painel ({ bus, 
       <div class="kv"><span class="rotulo">Noite mais arriscada sem aeração</span><b>${piorOD ? `${DIAS_SEMANA[new Date(piorOD.t).getUTCDay()]} ${fmtDiaMes(piorOD.t)} · ${fmt(piorOD.semAer.od, 1)} mg/L` : '--'}</b></div>
       <div class="kv"><span class="rotulo">Crescimento esperado</span><b>${fmt(est.W, 0)} → ${fmt(Wfim, 0)} g</b><span class="sutil" style="font-size:.8rem">≈ ${fmt(ganhoKg, 0)} kg de biomassa ${refsTxt(['yi1998', 'dampin2012'])}</span></div>
       <div class="kv"><span class="rotulo">Dias com alerta</span><b>${crit} crítico${crit === 1 ? '' : 's'} · ${aten} de atenção</b></div>`;
+    // clima de referência (INMET A002, 2023-2025) e comparação da semana com o mês
+    const mRef = mesDe(r.dias[0].t), nD = r.dias.length;
+    const media = k => r.dias.reduce((s, d) => s + d[k], 0) / nD;
+    const dTx = media('tmax') - NORMAIS.tmax[mRef], dTn = media('tmin') - NORMAIS.tmin[mRef];
+    const chuvaSem = soma('chuva'), chuvaEsp = NORMAIS.chuva[mRef] / 30.4 * nD;
+    const sinal = x => (x >= 0 ? '+' : '−') + fmt(Math.abs(x), 1);
+    $('#pv-ref-semana').innerHTML = `<b>Semana prevista contra a referência de ${MESES[mRef]}:</b> máximas ${sinal(dTx)} °C e mínimas ${sinal(dTn)} °C em relação à média; chuva de ${fmt(chuvaSem, 0)} mm, contra ${fmt(chuvaEsp, 0)} mm esperados em ${nD} dias. ${Math.abs(dTx) > 2 * NORMAIS.anomDP[mRef] ? 'A semana foge bastante do normal do mês (mais de 2 desvios-padrão).' : 'Dentro da variação comum do mês.'} ${refsTxt(['inmet'])}`;
+    $('#pv-ref').innerHTML = MESES.map((nome, m) => `<tr${m === mRef ? ' class="atual"' : ''}><td><b>${nome}</b></td><td class="num">${fmt(NORMAIS.tmax[m], 1)} °C</td><td class="num">${fmt(NORMAIS.tmin[m], 1)} °C</td><td class="num">${fmt(NORMAIS.tmed[m], 1)} °C</td><td class="num">± ${fmt(NORMAIS.anomDP[m], 1)} °C</td><td class="num">${fmt(NORMAIS.chuva[m], 0)} mm</td><td class="num">${Math.round(NORMAIS.pchuva[m] * 100)}%</td><td class="num">${fmt(NORMAIS.ur[m], 0)}%</td><td class="num">${fmt(NORMAIS.vento[m], 1)} m/s</td><td class="num">${fmt(NORMAIS.rad[m], 1)} MJ/m²</td><td class="num">${fmt(NORMAIS.pressao[m], 0)} hPa</td></tr>`).join('');
+    $('#pv-ref-nota').textContent = `Calculado pelo protótipo com os dados horários de ${NORMAIS.estacao} de 2023 a 2025 (hora local = UTC − 3). Máxima e mínima são médias das máximas e mínimas de cada dia; "dias com chuva" conta dias com 1 mm ou mais; "variação diária" é o desvio-padrão da temperatura média de um dia em torno da média do mês. 2025 tem falhas na estação de junho a dezembro. Extremos do período: ${fmt(NORMAIS.extremos.tmax, 1)} °C, ${fmt(NORMAIS.extremos.tmin, 1)} °C e ${fmt(NORMAIS.extremos.chuvaDia, 0)} mm num só dia. Vento medido a 10 m. O clima simulado usa estes números e o ciclo médio de cada hora.`;
     $('#pv-metodo').innerHTML = `Como é calculado: a água segue a média do ar ${refsTxt(['rotta2023'])}; o OD vem do balanço de oxigênio ${refsTxt(['boyd1978', 'romaire1979'])} com os parâmetros que o gêmeo ajustou nas últimas 24 h${est.theta ? '' : ' (sem dados ainda: valores iniciais)'} e a radiação prevista; a ração usa a tabela e o fator de temperatura ${refsTxt(['senar2019'])} limitados ao apetite do modelo de Yi; o lote vem das biometrias do viveiro.`;
   }
   window.addEventListener('resize', () => st.dias && desenhar());

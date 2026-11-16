@@ -26,20 +26,105 @@ const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 const fmtDiaMes = t => { const d = new Date(t); return d.getUTCDate() + ' ' + MESES[d.getUTCMonth()]; };
 
 /* ---------------- clima de Goiânia ----------------
-   Normais climatológicas 1991-2020 do INMET para Goiânia, tiradas dos balanços mensais
-   publicados pelo INMET [inmet]. Valores marcados "d" foram derivados (ver página Fontes):
-   maio e dezembro por interpolação ou pela normal da estação; médias ausentes = (máx+mín)/2 − 0,65 °C. */
+   Estação automática A002 Goiânia (GO) do INMET, dados horários de 01/01/2023 a 31/12/2025 [inmet].
+   Médias calculadas pelo protótipo a partir dos três arquivos anuais do Banco de Dados Meteorológicos
+   (2023.zip, 2024.zip, 2025.zip). Horas sem leitura (-9999) foram ignoradas; 2025 tem falhas de
+   junho a dezembro, então esses meses pesam mais 2023 e 2024. Hora local = UTC − 3.
+   tmax/tmin = média das máximas/mínimas diárias; chuva = total médio do mês; pchuva = fração de dias
+   com 1 mm ou mais; rad = radiação global média em MJ/m²/dia; anomDP = desvio-padrão da temperatura
+   média diária em torno da média do mês; anomAR1 = correlação de um dia com o seguinte. */
 const NORMAIS = {
-  tmax:  [30.6, 31.0, 30.9, 31.2, 30.6 /*d*/, 30.0, 30.6, 32.3 /*d*/, 34.0, 33.2, 31.1, 31.1 /*d*/],
-  tmin:  [20.1, 20.0, 20.0, 19.3, 17.2 /*d*/, 15.2, 14.8, 16.8 /*d*/, 19.4, 20.3, 20.3, 20.2 /*d*/],
-  tmed:  [24.7 /*d*/, 24.7, 24.7, 24.8, 23.3 /*d*/, 22.0 /*d*/, 22.5, 24.5, 26.3, 26.2, 25.0, 25.0 /*d*/],
-  chuva: [249.2, 235.8, 258.5, 137.7, 30.3, 8.4, 1.5, 9.5, 44.3, 144.1, 219.6, 260.8 /*d*/],     // mm/mês
-  // sem fonte (parâmetros do simulador): umidade média e chance de dia chuvoso
-  ur:     [77, 76, 77, 72, 64, 56, 47, 41, 47, 62, 73, 78],
-  pchuva: [0.65, 0.57, 0.55, 0.33, 0.10, 0.03, 0.03, 0.07, 0.20, 0.43, 0.60, 0.68]
+  tmax: [31.1, 32.1, 31.9, 31.8, 30.7, 30.4, 31.1, 32.8, 36.1, 34.6, 33.0, 32.2],
+  tmin: [20.5, 20.0, 20.4, 19.9, 16.0, 14.7, 13.4, 15.4, 19.1, 21.2, 20.9, 20.6],
+  tmed: [24.3, 24.6, 24.8, 24.5, 22.5, 21.7, 21.6, 23.5, 27.1, 26.7, 25.6, 25.0],
+  chuva: [267.6, 236.2, 153.5, 151.7, 28.0, 5.7, 0.0, 7.8, 20.8, 179.4, 299.5, 235.4],
+  pchuva: [0.60, 0.61, 0.46, 0.37, 0.01, 0.01, 0.00, 0.04, 0.13, 0.42, 0.62, 0.66],
+  ur: [76, 73, 73, 73, 64, 60, 52, 44, 42, 61, 69, 72],
+  vento: [0.8, 0.8, 0.8, 0.8, 0.9, 0.8, 0.9, 1.1, 1.1, 0.9, 0.8, 0.8],
+  pressao: [930.8, 931.8, 932.0, 931.8, 934.1, 935.3, 936.0, 934.5, 932.3, 930.8, 930.3, 930.4],
+  rad: [18.6, 19.3, 17.1, 16.3, 16.0, 14.5, 15.3, 15.9, 19.2, 18.3, 19.1, 19.4],
+  anomDP: [1.26, 1.40, 1.33, 1.02, 1.42, 1.07, 1.25, 2.01, 1.54, 2.22, 2.02, 1.49],
+  anomAR1: 0.69,
+  // ciclo médio de cada hora local (0 a 23 h), um vetor por mês
+  hT: [
+    [21.9, 21.6, 21.4, 21.2, 21.0, 20.9, 20.9, 21.8, 23.6, 25.3, 26.8, 27.8, 28.4, 28.8, 28.8, 28.2, 27.4, 26.5, 25.4, 24.1, 23.5, 23.1, 22.6, 22.3],
+    [21.8, 21.5, 21.2, 21.0, 20.8, 20.6, 20.4, 21.2, 23.2, 25.5, 27.6, 29.0, 29.4, 29.7, 29.5, 29.2, 28.4, 27.8, 26.1, 24.7, 23.6, 22.9, 22.5, 22.1],
+    [22.2, 21.9, 21.6, 21.3, 21.1, 20.9, 20.8, 21.5, 23.6, 25.9, 27.4, 28.7, 29.3, 29.7, 29.6, 29.3, 28.4, 27.3, 26.0, 24.7, 24.0, 23.5, 23.0, 22.5],
+    [21.7, 21.4, 21.1, 20.9, 20.7, 20.5, 20.3, 20.7, 23.2, 25.6, 27.5, 28.9, 29.6, 29.9, 30.1, 29.6, 28.7, 27.1, 25.3, 24.2, 23.5, 22.9, 22.4, 22.0],
+    [18.9, 18.4, 17.8, 17.4, 16.9, 16.6, 16.3, 16.7, 19.9, 23.3, 25.9, 27.6, 28.7, 29.3, 29.8, 29.6, 28.8, 27.0, 24.6, 23.2, 22.0, 21.1, 20.3, 19.5],
+    [18.1, 17.5, 16.8, 16.5, 16.0, 15.6, 15.2, 15.4, 17.9, 22.1, 25.1, 27.2, 28.3, 28.9, 29.3, 29.4, 28.0, 26.6, 24.2, 22.5, 21.3, 20.4, 19.5, 18.7],
+    [17.7, 17.0, 16.2, 15.6, 14.9, 14.4, 13.9, 14.0, 17.0, 21.4, 25.2, 27.4, 28.6, 29.5, 30.0, 30.2, 29.0, 27.5, 24.8, 23.2, 21.6, 20.5, 19.5, 18.6],
+    [19.7, 18.9, 18.1, 17.4, 16.8, 16.3, 16.2, 16.9, 20.5, 24.1, 27.1, 29.1, 30.4, 31.3, 31.5, 31.4, 30.8, 29.4, 26.9, 25.1, 23.5, 22.4, 21.1, 20.4],
+    [23.2, 22.4, 21.9, 21.1, 20.6, 20.2, 20.0, 21.2, 24.7, 28.6, 31.2, 32.9, 33.9, 34.3, 34.6, 34.4, 33.9, 32.3, 29.9, 28.1, 26.9, 25.8, 25.0, 24.1],
+    [23.6, 23.2, 22.8, 22.5, 22.1, 21.8, 21.7, 23.3, 25.6, 27.9, 29.9, 31.1, 32.1, 32.5, 32.5, 32.0, 31.3, 30.1, 28.4, 27.0, 26.0, 25.2, 24.7, 24.1],
+    [22.7, 22.4, 22.1, 21.8, 21.6, 21.4, 21.6, 23.1, 25.3, 27.3, 28.8, 29.9, 30.4, 30.8, 30.6, 30.4, 29.5, 28.3, 26.5, 25.2, 24.6, 23.9, 23.5, 23.1],
+    [22.3, 21.9, 21.6, 21.4, 21.3, 21.1, 21.2, 22.4, 24.3, 26.3, 27.6, 28.8, 29.6, 29.9, 30.1, 29.6, 28.7, 28.0, 26.2, 24.8, 24.0, 23.3, 22.9, 22.5]
+  ],
+  hUR: [
+    [87, 88, 89, 90, 90, 90, 91, 88, 80, 71, 65, 61, 58, 56, 56, 59, 62, 65, 69, 76, 79, 81, 83, 84],
+    [86, 86, 88, 89, 90, 90, 91, 89, 81, 71, 62, 55, 52, 51, 51, 52, 55, 58, 65, 72, 77, 80, 82, 84],
+    [84, 86, 87, 88, 89, 90, 90, 88, 79, 68, 62, 57, 54, 52, 52, 53, 57, 60, 66, 72, 75, 79, 81, 83],
+    [86, 88, 89, 89, 90, 90, 90, 90, 80, 69, 61, 54, 51, 50, 48, 50, 53, 59, 67, 73, 77, 80, 82, 85],
+    [80, 82, 84, 86, 87, 88, 88, 88, 76, 62, 53, 46, 41, 38, 36, 36, 37, 44, 53, 59, 65, 70, 73, 77],
+    [74, 76, 79, 81, 83, 84, 85, 85, 77, 60, 48, 40, 36, 33, 31, 30, 33, 37, 46, 52, 58, 62, 67, 71],
+    [66, 68, 72, 74, 77, 79, 81, 82, 72, 54, 41, 33, 29, 26, 25, 24, 25, 29, 36, 41, 48, 53, 58, 62],
+    [54, 57, 61, 64, 67, 70, 70, 68, 57, 44, 35, 29, 26, 23, 22, 22, 22, 24, 29, 34, 38, 43, 47, 51],
+    [50, 53, 56, 60, 62, 64, 65, 64, 50, 37, 30, 26, 23, 23, 22, 23, 23, 26, 30, 35, 37, 41, 45, 48],
+    [72, 74, 76, 78, 80, 81, 81, 76, 66, 56, 49, 45, 42, 40, 40, 41, 44, 46, 51, 57, 61, 65, 68, 71],
+    [80, 82, 83, 85, 86, 86, 87, 81, 71, 62, 56, 52, 49, 48, 48, 48, 51, 56, 63, 68, 72, 76, 78, 79],
+    [84, 86, 87, 88, 89, 89, 89, 86, 76, 67, 61, 56, 52, 51, 51, 51, 55, 58, 65, 71, 75, 78, 81, 83]
+  ],
+  hV: [
+    [0.3, 0.3, 0.2, 0.3, 0.3, 0.2, 0.2, 0.4, 0.8, 1.1, 1.3, 1.4, 1.5, 1.6, 1.5, 1.6, 1.4, 1.2, 0.8, 0.6, 0.5, 0.5, 0.4, 0.5],
+    [0.4, 0.3, 0.3, 0.3, 0.4, 0.3, 0.4, 0.4, 0.8, 1.1, 1.4, 1.5, 1.7, 1.5, 1.4, 1.4, 1.4, 1.2, 1.0, 0.6, 0.6, 0.6, 0.6, 0.4],
+    [0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.5, 0.8, 1.0, 1.3, 1.5, 1.6, 1.4, 1.5, 1.4, 1.2, 1.1, 0.7, 0.6, 0.4, 0.4, 0.5, 0.4],
+    [0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.4, 0.7, 1.1, 1.3, 1.5, 1.4, 1.5, 1.4, 1.3, 1.3, 1.2, 0.9, 0.6, 0.5, 0.5, 0.4, 0.3],
+    [0.4, 0.4, 0.3, 0.3, 0.4, 0.4, 0.4, 0.5, 0.8, 1.3, 1.8, 2.0, 1.8, 1.6, 1.6, 1.4, 1.3, 1.1, 0.6, 0.5, 0.4, 0.4, 0.5, 0.4],
+    [0.5, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.6, 1.1, 1.7, 1.9, 1.7, 1.7, 1.5, 1.4, 1.2, 0.9, 0.6, 0.4, 0.5, 0.5, 0.5, 0.5],
+    [0.5, 0.5, 0.5, 0.4, 0.4, 0.3, 0.4, 0.4, 0.6, 1.1, 1.8, 1.9, 1.9, 1.7, 1.6, 1.5, 1.3, 1.1, 0.5, 0.5, 0.5, 0.5, 0.6, 0.5],
+    [0.7, 0.7, 0.6, 0.6, 0.6, 0.6, 0.6, 0.7, 1.0, 1.5, 1.8, 1.9, 1.9, 1.9, 1.7, 1.7, 1.6, 1.3, 0.8, 0.9, 0.8, 0.6, 0.7, 0.6],
+    [0.4, 0.4, 0.4, 0.4, 0.5, 0.6, 0.6, 0.6, 1.0, 1.6, 1.8, 1.9, 1.9, 2.0, 2.0, 1.9, 1.7, 1.4, 1.0, 0.8, 0.7, 0.7, 0.6, 0.5],
+    [0.5, 0.4, 0.4, 0.5, 0.4, 0.4, 0.4, 0.7, 1.0, 1.3, 1.5, 1.6, 1.5, 1.6, 1.6, 1.5, 1.5, 1.1, 0.9, 0.7, 0.7, 0.4, 0.5, 0.6],
+    [0.4, 0.3, 0.3, 0.4, 0.3, 0.3, 0.3, 0.5, 0.8, 1.2, 1.4, 1.5, 1.5, 1.5, 1.6, 1.5, 1.5, 1.3, 1.0, 0.7, 0.7, 0.5, 0.5, 0.5],
+    [0.4, 0.4, 0.2, 0.2, 0.3, 0.4, 0.3, 0.5, 0.9, 1.2, 1.4, 1.5, 1.5, 1.5, 1.5, 1.6, 1.3, 1.3, 0.9, 0.7, 0.6, 0.6, 0.5, 0.4]
+  ],
+  hP: [
+    [931.6, 931.1, 930.6, 930.4, 930.3, 930.6, 931.1, 931.7, 932.2, 932.6, 932.6, 932.3, 931.6, 930.8, 930.0, 929.2, 928.7, 928.6, 928.9, 929.6, 930.3, 931.1, 931.7, 931.9],
+    [932.5, 932.1, 931.7, 931.4, 931.4, 931.7, 932.0, 932.6, 933.2, 933.5, 933.5, 933.2, 932.7, 931.9, 931.0, 930.2, 929.6, 929.5, 929.8, 930.4, 931.2, 932.0, 932.7, 932.9],
+    [932.6, 932.3, 931.9, 931.7, 931.6, 931.8, 932.2, 932.7, 933.4, 933.8, 933.8, 933.5, 932.9, 931.9, 931.0, 930.2, 929.9, 929.9, 930.2, 930.7, 931.4, 932.2, 932.7, 932.8],
+    [932.4, 932.0, 931.7, 931.5, 931.4, 931.5, 932.0, 932.6, 933.2, 933.6, 933.7, 933.2, 932.4, 931.5, 930.6, 929.9, 929.7, 929.9, 930.3, 930.9, 931.5, 932.1, 932.4, 932.5],
+    [934.5, 934.2, 933.8, 933.7, 933.6, 933.9, 934.4, 935.0, 935.6, 936.1, 936.0, 935.6, 934.8, 933.9, 933.0, 932.6, 932.5, 932.7, 933.0, 933.3, 933.9, 934.2, 934.6, 934.6],
+    [935.7, 935.4, 935.1, 934.9, 934.9, 935.1, 935.5, 936.1, 936.9, 937.2, 937.1, 936.7, 935.9, 935.0, 934.1, 933.6, 933.5, 933.7, 934.1, 934.5, 935.0, 935.5, 935.7, 935.7],
+    [936.5, 936.2, 935.8, 935.6, 935.5, 935.7, 936.2, 936.8, 937.5, 937.9, 938.0, 937.6, 936.8, 935.8, 934.9, 934.3, 934.2, 934.4, 934.8, 935.0, 935.7, 936.0, 936.5, 936.6],
+    [935.1, 934.7, 934.4, 934.2, 934.2, 934.4, 935.0, 935.6, 936.1, 936.5, 936.5, 936.0, 935.1, 934.2, 933.2, 932.7, 932.5, 932.7, 933.1, 933.5, 934.1, 934.6, 934.9, 935.1],
+    [932.9, 932.5, 932.0, 931.9, 931.9, 932.3, 933.1, 933.8, 934.3, 934.4, 934.3, 933.8, 932.9, 931.9, 930.9, 930.2, 930.0, 930.2, 930.6, 931.2, 931.8, 932.4, 932.8, 933.0],
+    [931.3, 930.9, 930.4, 930.3, 930.4, 930.8, 931.3, 932.0, 932.6, 932.8, 932.7, 932.3, 931.4, 930.3, 929.3, 928.6, 928.3, 928.5, 929.1, 929.9, 930.6, 931.3, 931.8, 931.7],
+    [930.9, 930.4, 929.9, 929.7, 929.9, 930.3, 930.8, 931.4, 931.9, 932.2, 932.0, 931.6, 930.9, 930.0, 929.0, 928.3, 928.0, 928.1, 928.6, 929.3, 930.2, 930.9, 931.3, 931.3],
+    [930.9, 930.4, 930.0, 929.9, 930.0, 930.3, 930.9, 931.5, 931.9, 932.2, 932.2, 931.8, 931.1, 930.3, 929.4, 928.7, 928.2, 928.2, 928.6, 929.3, 930.1, 930.8, 931.3, 931.4]
+  ],
+  hChuva: [
+    [15.9, 15.1, 4.5, 2.9, 1.1, 1.5, 3.7, 6.3, 5.2, 2.5, 10.6, 8.9, 10.8, 5.3, 8.9, 10.9, 21.9, 42.5, 17.7, 14.5, 11.2, 18.6, 19.1, 8.1],
+    [10.2, 6.7, 5.4, 5.3, 5.0, 3.4, 1.8, 4.5, 2.0, 0.3, 0.3, 0.5, 0.6, 5.5, 18.7, 36.6, 23.2, 9.6, 3.5, 6.2, 31.4, 22.7, 16.9, 16.2],
+    [1.8, 4.3, 4.7, 3.1, 14.4, 10.5, 1.8, 0.5, 2.0, 0.7, 6.1, 3.9, 8.8, 8.9, 9.2, 7.5, 23.0, 14.7, 3.7, 3.1, 3.5, 4.5, 5.4, 7.3],
+    [0.7, 1.0, 1.8, 3.3, 8.7, 3.9, 4.5, 1.4, 2.9, 0.1, 0.4, 0.2, 0.7, 0.4, 13.7, 6.0, 10.9, 35.8, 14.5, 15.0, 7.7, 2.0, 6.1, 10.2],
+    [0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 21.8, 2.9, 0.2, 0.0, 0.0, 0.0],
+    [1.9, 2.4, 0.1, 0.0, 3.0, 0.8, 0.3, 0.1, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.6, 0.2, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.3, 0.1, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 1.6, 2.0, 0.4],
+    [0.1, 0.9, 0.1, 0.0, 1.6, 0.0, 0.2, 0.1, 0.4, 0.0, 0.1, 0.3, 0.1, 4.8, 2.4, 0.9, 0.7, 0.7, 4.2, 0.4, 0.0, 0.5, 0.1, 0.1],
+    [8.3, 1.3, 4.1, 0.5, 14.9, 11.3, 3.3, 1.9, 0.6, 3.7, 3.0, 3.7, 11.2, 6.6, 4.1, 19.9, 16.4, 3.0, 7.5, 12.9, 17.7, 12.5, 3.5, 7.5],
+    [19.9, 20.6, 14.4, 37.3, 6.5, 2.1, 4.9, 3.2, 0.8, 1.2, 1.7, 0.9, 1.6, 3.1, 1.6, 14.7, 22.9, 50.0, 36.3, 22.1, 11.0, 11.8, 4.6, 6.3],
+    [2.1, 6.5, 11.0, 6.9, 13.1, 11.0, 8.7, 7.6, 6.0, 6.6, 4.2, 3.0, 2.8, 4.7, 4.9, 7.3, 25.1, 12.2, 23.9, 8.0, 13.6, 13.3, 15.1, 2.9]
+  ],
+  extremos: { tmax: 41.1, tmin: 6.2, chuvaDia: 91.2 },
+  periodo: '2023–2025', estacao: 'A002 Goiânia'
 };
-// pressão pela atmosfera padrão a 749 m de altitude (≈ 926 hPa)
-const PRESSAO_LOCAL = 1013.25 * Math.pow(1 - 2.25577e-5 * 749, 5.25588);
+// pressão média medida na estação (727 m de altitude), média dos 12 meses
+const PRESSAO_LOCAL = NORMAIS.pressao.reduce((x, y) => x + y, 0) / 12;
+// valor do ciclo horário no instante h (horas decimais), interpolando entre as horas
+const cicloHora = (v, h) => { const i = Math.floor(h) % 24, f = h - Math.floor(h); return v[i] * (1 - f) + v[(i + 1) % 24] * f; };
+// a média das horas suaviza os extremos; o formato do ciclo médio é esticado até a máxima e a mínima diárias médias
+const cicloTemp = (m, h) => { const v = NORMAIS.hT[m], lo = Math.min(...v), hi = Math.max(...v); return NORMAIS.tmin[m] + (cicloHora(v, h) - lo) / (hi - lo) * (NORMAIS.tmax[m] - NORMAIS.tmin[m]); };
 const LAT = -16.68 * Math.PI / 180;
 function radiacaoCeuLimpo(t) {           // W/m², céu limpo, latitude de Goiânia
   const doy = diaDoAno(t), h = horaDe(t);
@@ -49,29 +134,43 @@ function radiacaoCeuLimpo(t) {           // W/m², céu limpo, latitude de Goiâ
   return s > 0 ? 1080 * Math.pow(s, 1.2) : 0;
 }
 
+// razão média entre a radiação medida (INMET) e a de céu limpo, por mês: calibra a nebulosidade do simulador
+const KT_MES = NORMAIS.rad.map((r, m) => {
+  const t0 = Date.UTC(2025, m, 15); let cs = 0;
+  for (let t = t0; t < t0 + DIA; t += 10 * MIN) cs += radiacaoCeuLimpo(t) * 600 / 1e6;
+  return Math.min(0.95, r / cs);
+});
 class Clima {
-  constructor(seed) { this.r = rng(seed); this.dia = -1; this.anom = 0; this.chuvoso = false; this.nuvemDia = 0.85; this.Ta = 24; this.UR = 70; this.rad = 0; this.chuva = 0; this.vento = 1; this.pressao = 926; this.nuvem = 0.85; }
+  constructor(seed) { this.r = rng(seed); this.dia = -1; this.anom = 0; this.chuvoso = false; this.nuvemDia = 0.85; this.Ta = 24; this.UR = 70; this.rad = 0; this.chuva = 0; this.vento = 1; this.pressao = PRESSAO_LOCAL; this.nuvem = 0.85; this.ruidoVento = 0; }
   passo(t, ctl) {
     const m = mesDe(t), h = horaDe(t), dia = Math.floor(t / DIA);
-    if (dia !== this.dia) {                // sorteios diários: anomalia térmica, chuva, nebulosidade
+    if (dia !== this.dia) {                // sorteios diários com as estatísticas do INMET A002 2023-2025
       this.dia = dia;
-      const seco = NORMAIS.pchuva[m] < 0.2;
-      this.anom = 0.7 * this.anom + gauss(this.r) * (seco ? 1.6 : 1.0);
-      this.chuvoso = this.r() < NORMAIS.pchuva[m];
-      this.nuvemDia = this.chuvoso ? 0.35 + 0.25 * this.r() : (seco ? 0.86 + 0.12 * this.r() : 0.62 + 0.3 * this.r());
-      this.inicioChuva = 13 + 4 * this.r();
-      this.mmDia = NORMAIS.chuva[m] / (30 * Math.max(0.03, NORMAIS.pchuva[m]));
+      // anomalia da média diária: AR(1) com o desvio-padrão e a autocorrelação medidos
+      const rho = NORMAIS.anomAR1;
+      this.anom = rho * this.anom + Math.sqrt(1 - rho * rho) * NORMAIS.anomDP[m] * gauss(this.r);
+      const p = NORMAIS.pchuva[m];
+      this.chuvoso = this.r() < p;
+      // nebulosidade: média do mês igual à razão medida/céu limpo; dia de chuva com 65% dessa luz
+      const kt = KT_MES[m], fSeco = p < 1 ? (1 - 0.65 * p) / (1 - p) : 1;
+      this.nuvemDia = clamp(kt * (this.chuvoso ? 0.65 : fSeco) * (1 + 0.12 * gauss(this.r)), 0.1, 1);
+      // hora de início da chuva sorteada pela distribuição horária da chuva no mês (linha h = chuva entre h-1 e h)
+      const pesos = NORMAIS.hChuva[m], tot = pesos.reduce((x, y) => x + y, 0);
+      let u = this.r() * tot, hh = 0; while (hh < 23 && u > pesos[hh]) { u -= pesos[hh]; hh++; }
+      this.inicioChuva = (hh + 23) % 24 + this.r();
+      this.mmDia = p > 0 ? NORMAIS.chuva[m] / (30.4 * p) : 0;
     }
-    const chovendoAgora = (ctl.chuvaForcada || (this.chuvoso && h >= this.inicioChuva && h < this.inicioChuva + 3));
+    const dh = (h - this.inicioChuva + 24) % 24;
+    const chovendoAgora = (ctl.chuvaForcada || (this.chuvoso && dh < 3));
     this.chuva = chovendoAgora ? (ctl.chuvaForcada ? 12 : this.mmDia / 3) : 0;
     this.nuvem = ctl.nuvemManual != null ? ctl.nuvemManual : (chovendoAgora ? 0.25 : this.nuvemDia);
     this.rad = radiacaoCeuLimpo(t) * this.nuvem;
-    // ciclo diário entre a mínima e a máxima normais do mês (INMET), mais a anomalia do dia
-    const meio = (NORMAIS.tmax[m] + NORMAIS.tmin[m]) / 2, amp = (NORMAIS.tmax[m] - NORMAIS.tmin[m]) / 2;
-    this.Ta = meio + this.anom + ctl.deltaTempAr + amp * Math.sin(2 * Math.PI * (h - 9) / 24) - (chovendoAgora ? 2.5 : 0);
-    this.UR = clamp(NORMAIS.ur[m] + 17 * Math.cos(2 * Math.PI * (h - 5) / 24) + (chovendoAgora ? 25 : 0) - ctl.deltaTempAr * 1.2, 15, 100);
-    this.vento = Math.max(0, 1.1 + 1.6 * Math.max(0, Math.sin(2 * Math.PI * (h - 8) / 24)) + 0.4 * gauss(this.r) * 0.5 + ctl.ventoExtra + (chovendoAgora ? 2 : 0));
-    this.pressao = PRESSAO_LOCAL + 1.2 * Math.cos(2 * Math.PI * (h - 10) / 12) + ctl.deltaTempAr * -0.3;
+    // ciclo horário médio do mês (INMET), mais a anomalia do dia; a chuva esfria o ar
+    this.Ta = cicloTemp(m, h) + this.anom + ctl.deltaTempAr - (chovendoAgora ? 2.5 : 0);
+    this.UR = clamp(cicloHora(NORMAIS.hUR[m], h) - 2.5 * this.anom + (chovendoAgora ? 20 : 0) - ctl.deltaTempAr * 1.2, 15, 100);
+    this.ruidoVento = 0.9 * (this.ruidoVento || 0) + 0.1 * gauss(this.r);
+    this.vento = Math.max(0, cicloHora(NORMAIS.hV[m], h) * (1 + 0.8 * this.ruidoVento) + ctl.ventoExtra + (chovendoAgora ? 2 : 0));
+    this.pressao = cicloHora(NORMAIS.hP[m], h) - ctl.deltaTempAr * 0.3;
   }
 }
 
@@ -547,7 +646,7 @@ function calibrarCrescimento(biometrias, amb, refeicoes, N) {
   }
   return { alfa: melhor.alfa, rmse: Math.sqrt(melhor.erro / (biometrias.length - 1)), n: biometrias.length };
 }
-// projeção até o abate com as normais do INMET (água ≈ média do ar, Rotta et al. 2023, mais o desvio atual medido)
+// projeção até o abate com as médias do INMET A002 2023-2025 (água ≈ média do ar, Rotta et al. 2023, mais o desvio atual medido)
 function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240) {
   const pts = [{ t: t0, W: W0 }]; let W = W0, t = t0, abate = null;
   for (let d = 1; d <= diasMax; d++) {
@@ -663,7 +762,7 @@ function avaliarAlertas(L, prev, extras) {
   if (ph != null) alerta('ph', 'ph', ph, vir(ph, 2), { critico: 'pH crítico', atencao: 'pH fora da faixa ideal' });
   if (uia != null) alerta('nh3', 'nh3', uia, `${vir(uia, 3)} mg/L de NH₃-N`, { critico: 'Amônia tóxica alta', atencao: 'Amônia tóxica acima do ideal' });
   if (extras.divergencia) a.push({ id: 'div', nivel: 'atencao', titulo: 'Leitura fora do esperado', texto: extras.divergencia });
-  if (extras.anomaliaAr != null && extras.anomaliaAr < -4) a.push({ id: 'frio', nivel: 'atencao', titulo: 'Frente fria', texto: `Ar ${Math.abs(extras.anomaliaAr).toFixed(1)} °C abaixo da normal de ${MESES[extras.mes]} (INMET). A água esfria e a frente fria pode misturar a coluna d'água (Araújo et al., 2017).` });
+  if (extras.anomaliaAr != null && extras.anomaliaAr < -4) a.push({ id: 'frio', nivel: 'atencao', titulo: 'Frente fria', texto: `Ar ${Math.abs(extras.anomaliaAr).toFixed(1)} °C abaixo da média de ${MESES[extras.mes]} (INMET 2023–2025). A água esfria e a frente fria pode misturar a coluna d'água (Araújo et al., 2017).` });
   if (extras.falhaAerador) a.push({ id: 'aer', nivel: 'critico', titulo: 'Aerador sem efeito', texto: 'O aerador está ligado, mas o OD continua caindo. Verificar o equipamento.' });
   return a;
 }

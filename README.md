@@ -45,7 +45,7 @@ A amônia aparece como NH₃-N (nitrogênio da amônia não ionizada). Em mg/L d
 
 | Parte | O que faz | Base |
 |---|---|---|
-| Clima | Normais de Goiânia 1991–2020, ciclo diário, chuva e nuvens sorteadas | INMET |
+| Clima | Médias da estação automática A002 Goiânia do INMET (dados horários de 2023 a 2025): máxima, mínima, chuva, dias com chuva, umidade, vento, radiação e pressão por mês, ciclo médio de cada hora, horário típico da chuva e variação de um dia para o outro | INMET |
 | Viveiro | Água segue a média do ar; balanço de O₂ (fotossíntese, respiração, troca com o ar, aerador); pH, amônia, mortalidade | Rotta 2023; Boyd 1978; Romaire e Boyd 1979; Kim e Jo 1999; Benson e Krause 1984; Emerson 1975 |
 | Previsão de OD (híbrida) | Balanço de O₂ com 4 parâmetros reestimados nas últimas 24 h | Boyd 1978; Romaire e Boyd 1979 |
 | Crescimento | Modelo de Yi com α calibrado pelas biometrias | Yi 1998; Dampin 2012 |
@@ -66,7 +66,7 @@ A lista completa, com 34 itens e o tipo de fonte de cada um, está na página **
 - EL-SHAFAI, S. A. et al. Chronic ammonia toxicity to duckweed-fed tilapia (Oreochromis niloticus). Aquaculture, v. 232, p. 117–127, 2004.
 - EMERSON, K. et al. Aqueous ammonia equilibrium calculations: effect of pH and temperature. Journal of the Fisheries Research Board of Canada, v. 32, p. 2379–2383, 1975.
 - FRANCIS-FLOYD, R. Dissolved oxygen for fish production. FA27. University of Florida, IFAS Extension, 2003.
-- INMET. Normais climatológicas 1991–2020 e balanços mensais de Goiânia (GO).
+- INMET. Banco de Dados Meteorológicos: dados horários da estação automática A002 Goiânia (GO), 2023 a 2025. https://portal.inmet.gov.br/dadoshistoricos
 - KIM, I.-B.; JO, J.-Y. Oxygen consumption in Nile tilapia, Oreochromis niloticus, in relation to body weight and water temperature. Journal of Aquaculture (Coreia), v. 12, n. 3, p. 247–254, 1999.
 - KUBITZA, F. Water quality impacts on health and performance of fish and shrimp, Part 3: the nitrogenous compounds. Responsible Seafood Advocate, Global Seafood Alliance, 2026.
 - MUSTAPHA, M. K.; ATOLAGBE, S. D. Tolerance level of different life stages of Nile tilapia to low pH and acidified waters. The Journal of Basic and Applied Zoology, v. 79, 46, 2018. DOI 10.1186/s41936-018-0061-3.
@@ -86,15 +86,12 @@ Todos os dados do viveiro são simulados. O viveiro "real" usa α = 1,08 de prop
 
 O computador mostra o painel no projetor e o celular controla a simulação. Os dois trocam mensagens pelo broker MQTT público da HiveMQ (`wss://broker.hivemq.com:8884/mqtt`, sem conta). Cada apresentação usa um código de sala aleatório nos tópicos (`gemeo/viveiro1/<sala>/...`), para ninguém interferir. Os dados são simulados; quem souber o código da sala consegue ver as mensagens.
 
-**Uma vez só: hospedar o site no GitHub Pages**
-1. Crie um repositório público no GitHub (por exemplo `gemeo-tilapia`).
-2. Envie para a raiz do repositório todo o conteúdo da pasta `site/`, inclusive `mqtt.min.js`, `qrcode.js` e `.nojekyll`. Pelo navegador: **Add file → Upload files**.
-3. Em **Settings → Pages**, escolha **Deploy from a branch**, branch `main`, pasta `/ (root)`, e salve.
-4. Em um ou dois minutos, o site fica em `https://<seu-usuario>.github.io/gemeo-tilapia/`.
+**Site publicado:** https://fabioamorimrf.github.io/gemeo-digital-piscicultura/ (repositório `fabioamorimrf/gemeo-digital-piscicultura`, GitHub Pages na branch `main`, pasta raiz).
 
 **No dia**
 1. No computador, abra o endereço do GitHub Pages e clique em **Controlar pelo celular → Conectar e gerar o QR code**.
-2. Leia o QR com a câmera do celular. O simulador abre no celular já na mesma sala, e a simulação passa para ele.
+2. Leia o QR com a câmera do celular. O simulador abre no celular já na mesma sala e vira um controle remoto: a simulação continua rodando só no painel do computador, o celular manda cada ajuste para o painel e mostra o estado que o painel devolve. Se o celular abrir antes do painel, ele espera o painel aparecer.
+   Feche abas antigas do simulador no celular antes de começar.
 3. Os dois aparelhos precisam de internet, mas não precisam estar na mesma rede.
 
 Para trocar de sala, use **Desconectar e trocar de sala**. Se for usar um broker com senha, preencha usuário e senha em "Usuário e senha". Crie uma credencial só para a demo, porque ela vai no QR code e fica visível no navegador.
@@ -111,7 +108,7 @@ Com o `servidor.py`, o computador roda o site e um broker MQTT só para a aprese
 1. Ligue o computador e o celular na mesma rede Wi-Fi. Se a rede da sala bloquear (algumas redes da universidade isolam os aparelhos), ligue o roteador do celular e conecte o computador nele. Não precisa de dados móveis: a conexão fica só entre os dois.
 2. Dê dois cliques em `iniciar-servidor.bat`. Na primeira vez o Windows pergunta se libera o Python na rede: marque **Redes privadas** e clique em **Permitir**.
 3. O painel abre no navegador do computador. Clique em **Controlar pelo celular** e leia o QR code com a câmera do celular.
-4. O simulador abre no celular e a simulação passa para ele sem perder o estado. O painel no projetor mostra "Simulador via MQTT local".
+4. O simulador abre no celular como controle remoto; a simulação continua no computador. O painel no projetor mostra "Simulador via MQTT local".
 5. Ao terminar, feche a janela preta do servidor.
 
 As telas conversam por MQTT de verdade: a porta 8000 serve o site e o MQTT por WebSocket, e a porta 1883 o MQTT por TCP. O simulador publica as leituras nos tópicos do contrato (`gemeo/viveiro1/agua/od`, `clima/...`, `atuador/...`), e os comandos do painel vão para `gemeo/viveiro1/comando/aerador`. Para mostrar as mensagens passando, conecte o MQTT Explorer em `localhost:1883`.
