@@ -1,0 +1,167 @@
+<div class="wrap">
+  <header class="topo">
+    <div class="linha-abas"><nav class="abas" role="tablist" aria-label="Seções do gêmeo"><button role="tab" data-vista="painel" aria-current="page"><i class="ic" data-ic="layout-dashboard"></i>Painel</button><button role="tab" data-vista="previsao"><i class="ic" data-ic="calendar-days"></i>Previsão 7 dias</button><button role="tab" data-vista="fontes"><i class="ic" data-ic="book-open"></i>Fontes</button></nav><button class="bt-tema" id="bt-tema" type="button" aria-label="Alternar tema claro e escuro" title="Tema claro / escuro"><span class="ic-sol"><i class="ic" data-ic="sun"></i></span><span class="ic-lua"><i class="ic" data-ic="moon"></i></span></button></div>
+    <div class="marca">
+      <h1>Gêmeo digital <span>· Viveiro 1</span></h1>
+      <p>Tilápia-do-nilo · Goiânia (GO) · viveiro escavado de 1.000 m², 1,2 m de profundidade</p>
+    </div>
+    <div class="relogio"><span class="hora" id="hora">--:--</span><span class="data" id="data">carregando</span></div>
+    <div class="chips">
+      <span class="chip" id="chip-disp">ESP32</span>
+      <span class="chip neutro" id="chip-fonte">Procurando simulador</span>
+      <span class="chip" id="chip-aer">Aeração</span>
+      <span class="chip neutro" id="chip-vel"></span>
+    </div>
+    <div class="acoes-topo">
+      <a class="btn primario" href="simulador.html" target="_blank" rel="opener" id="bt-abrir-sim"><i class="ic" data-ic="sliders-horizontal"></i>Abrir o simulador</a>
+      <button class="btn" id="bt-celular" hidden><i class="ic" data-ic="smartphone"></i>Controlar pelo celular</button>
+      <button class="btn" id="bt-controles" hidden><i class="ic" data-ic="sliders-horizontal"></i>Controles aqui</button>
+    </div>
+  </header>
+
+  <div id="vista-painel">
+  <div class="aviso" id="aviso-parado" hidden>
+    <span>O simulador parou de enviar dados (a aba foi fechada ou está em segundo plano).</span>
+    <button class="btn" id="bt-rodar-aqui">Rodar a simulação nesta aba</button>
+  </div>
+  <div class="aviso" id="aviso-offline" hidden><span id="aviso-offline-txt"></span></div>
+
+  <section class="leituras" aria-label="Leituras atuais">
+    <div class="tile" id="t-temp"><span class="rotulo"><i class="ic" data-ic="thermometer"></i>Água</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="regua-linha"><div class="regua" aria-hidden="true"><b></b></div><span class="selo"></span></div><div class="linha2"><span>ideal 26 a 30 °C</span><span></span></div></div>
+    <div class="tile" id="t-od"><span class="rotulo"><i class="ic" data-ic="droplets"></i>Oxigênio (OD)</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="regua-linha"><div class="regua" aria-hidden="true"><b></b></div><span class="selo"></span></div><div class="linha2"><span>ideal ≥ 5 · aerar &lt; 4</span><span></span></div></div>
+    <div class="tile" id="t-ph"><span class="rotulo"><i class="ic" data-ic="flask-conical"></i>pH</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="regua-linha"><div class="regua" aria-hidden="true"><b></b></div><span class="selo"></span></div><div class="linha2"><span>ideal 5,5 a 9,0</span><span></span></div></div>
+    <div class="tile" id="t-nh3"><span class="rotulo"><i class="ic" data-ic="test-tube"></i>Amônia (NH₃-N)</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="regua-linha"><div class="regua" aria-hidden="true"><b></b></div><span class="selo"></span></div><div class="linha2"><span>ideal &lt; 0,07</span><span></span></div></div>
+    <div class="tile" id="t-ar"><span class="rotulo"><i class="ic" data-ic="thermometer-sun"></i>Ar · estação</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="linha2"><span></span><span></span></div></div>
+    <div class="tile" id="t-sol"><span class="rotulo"><i class="ic" data-ic="sun"></i>Radiação solar</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="linha2"><span></span><span></span></div></div>
+    <div class="tile" id="t-peixe"><span class="rotulo"><i class="ic" data-ic="fish"></i>Peso médio estimado</span><span class="valor">--</span><canvas aria-hidden="true"></canvas><div class="linha2"><span></span><span></span></div></div>
+  </section>
+
+  <main class="grade">
+    <article class="card s8">
+      <header><h2><i class="ic" data-ic="activity"></i>Oxigênio dissolvido: últimas 24 h e próximas 12 h</h2>
+        <div class="legenda"><span><i style="--c:var(--accent)"></i>medido</span><span><i class="tr" style="--c:var(--crit)"></i>previsto sem aeração</span><span><i class="tr" style="--c:var(--accent)"></i>previsto com o plano do gêmeo</span><span><i class="bloco" style="--c:var(--accent)"></i>aerador ligado</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div>
+      </header>
+      <canvas class="grafico" id="g-od" role="img" aria-label="Gráfico do oxigênio dissolvido medido e previsto"></canvas>
+      <p class="fonte-zona" data-zona="od"></p>
+      <div class="resumo-od">
+        <div class="kv"><span class="rotulo">Mínimo sem aeração</span><b id="od-min">--</b></div>
+        <div class="kv"><span class="rotulo">Mínimo com o plano</span><b id="od-plano">--</b></div>
+        <div class="kv"><span class="rotulo">Cruza 3 mg/L</span><b id="od-cruza">--</b></div>
+      </div>
+      <p class="sutil" style="margin:0;font-size:.8rem">Modelo híbrido: balanço de oxigênio na estrutura de Boyd et al. (1978) e Romaire e Boyd (1979), com parâmetros reestimados pelos dados das últimas 24 h. <span id="od-modelo"></span></p>
+    </article>
+
+    <aside class="card s4" id="aerador">
+      <header><h2><i class="ic" data-ic="fan"></i>Aerador</h2><span class="sutil mono">comando/aerador</span></header>
+      <div class="aerador-estado">
+        <svg class="helice" viewBox="0 0 48 48" aria-hidden="true"><g fill="currentColor"><circle cx="24" cy="24" r="4"/><path d="M24 20c-2-8 0-15 6-16 3 6-1 12-6 16z"/><path d="M28 24c8-2 15 0 16 6-6 3-12-1-16-6z"/><path d="M24 28c2 8 0 15-6 16-3-6 1-12 6-16z"/><path d="M20 24c-8 2-15 0-16-6 6-3 12 1 16 6z"/></g></svg>
+        <div><div class="grande" id="aer-estado">--</div><div class="sutil" id="aer-origem"></div></div>
+      </div>
+      <div class="botoes">
+        <button class="btn" id="bt-ligar">Ligar</button>
+        <button class="btn" id="bt-desligar">Desligar</button>
+        <button class="btn" id="bt-auto">Automático</button>
+      </div>
+      <div class="recomendacao" id="aer-rec"></div>
+      <p class="sutil" style="margin:0;font-size:.82rem" id="aer-horas"></p>
+      <p class="sutil" style="margin:0;font-size:.78rem">Regra do gêmeo: ligar com OD medido ou previsto abaixo de 4 mg/L (Francis-Floyd, 2003). No ESP32, sem o gêmeo, liga abaixo de 3 mg/L (Boyd, 2018a); abaixo de 2,5 mg/L liga em qualquer modo.</p>
+    </aside>
+
+    <article class="card s5">
+      <header><h2><i class="ic" data-ic="wheat"></i>Ração recomendada para hoje</h2><span class="sutil mono">comando/racao</span></header>
+      <div class="racao-total"><span class="grande"><span id="rac-total">--</span><small style="font-size:1rem"> kg</small></span><span class="sutil" id="rac-pct"></span></div>
+      <div class="kv"><span class="sutil" id="rac-base" style="font-size:.85rem"></span><div class="barra-comp"><span id="rac-barra"></span></div></div>
+      <p style="margin:0;font-size:.9rem" id="rac-motivo"></p>
+      <div class="tabela-rolagem"><table><thead><tr><th>Horário</th><th>Quantidade</th><th>OD previsto</th><th>Situação</th></tr></thead><tbody id="rac-ref"></tbody></table></div>
+      <p class="sutil" style="margin:0;font-size:.78rem" id="rac-calib"></p>
+    </article>
+
+    <article class="card s7">
+      <header><h2><i class="ic" data-ic="thermometer"></i>Temperatura</h2>
+        <div class="legenda"><span><i style="--c:var(--accent)"></i>água</span><span><i class="tr" style="--c:var(--accent)"></i>água prevista</span><span><i style="--c:var(--ar)"></i>ar</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div>
+      </header>
+      <canvas class="grafico baixo" id="g-temp" role="img" aria-label="Gráfico da temperatura da água e do ar"></canvas>
+      <p class="fonte-zona" data-zona="temp"></p>
+    </article>
+
+    <article class="card s7">
+      <header><h2><i class="ic" data-ic="trending-up"></i>Crescimento do lote</h2>
+        <div class="legenda"><span><i style="--c:var(--ink)"></i>biometrias</span><span><i style="--c:var(--racao)"></i>modelo de Yi calibrado</span><span><i class="tr" style="--c:var(--racao)"></i>projeção com as normais do INMET 1991-2020</span></div>
+      </header>
+      <canvas class="grafico baixo" id="g-cresc" role="img" aria-label="Gráfico do crescimento dos peixes e projeção até o abate"></canvas>
+      <div class="resumo-od">
+        <div class="kv"><span class="rotulo">Abate previsto (800 g)</span><b id="cr-abate">--</b></div>
+        <div class="kv"><span class="rotulo">Ganho entre biometrias</span><b id="cr-ganho">--</b></div>
+        <div class="kv"><span class="rotulo">Fator de calibração α</span><b id="cr-alfa">--</b></div>
+      </div>
+    </article>
+
+    <article class="card s5">
+      <header><h2><i class="ic" data-ic="bell"></i>Alertas</h2><span class="pill" id="n-alertas"></span></header>
+      <ul class="lista" id="alertas"></ul>
+      <span class="rotulo">O que o gêmeo fez</span>
+      <ul class="log" id="acoes"></ul>
+    </article>
+
+    <article class="card s6">
+      <header><h2><i class="ic" data-ic="flask-conical"></i>pH: últimas 24 h</h2><div class="legenda"><span><i style="--c:var(--accent)"></i>medido</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div></header>
+      <canvas class="grafico baixo" id="g-ph" role="img" aria-label="Gráfico do pH com as zonas para a tilápia"></canvas>
+      <p class="fonte-zona" data-zona="ph"></p>
+    </article>
+
+    <article class="card s6">
+      <header><h2><i class="ic" data-ic="test-tube"></i>Amônia tóxica (NH₃-N): últimas 24 h</h2><div class="legenda"><span><i style="--c:var(--accent)"></i>calculada</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div></header>
+      <canvas class="grafico baixo" id="g-nh3" role="img" aria-label="Gráfico da amônia não ionizada com as zonas para a tilápia"></canvas>
+      <p class="fonte-zona" data-zona="nh3"></p>
+    </article>
+
+    <article class="card s12">
+      <header><h2><i class="ic" data-ic="waves"></i>Como os dados circulam</h2><span class="sutil mono">gemeo/viveiro1/#</span></header>
+      <div class="fluxo">
+        <div><b>Viveiro simulado</b>Clima de Goiânia, balanço de oxigênio, pH, amônia e crescimento dos peixes.</div><span class="seta">→</span>
+        <div><b>ESP32 virtual</b>Lê os sensores, publica a cada leitura e mantém o fallback do aerador.</div><span class="seta">→</span>
+        <div><b>Tópicos MQTT</b>Aqui, um canal entre as abas faz o papel do broker HiveMQ.</div><span class="seta">→</span>
+        <div><b>Gêmeo digital</b>Guarda o histórico, prevê o OD, calibra o crescimento e prescreve ração e aeração.</div><span class="seta">→</span>
+        <div><b>Painel e comandos</b>Mostra tudo ao vivo e devolve os comandos ao viveiro.</div>
+      </div>
+    </article>
+  </main>
+  </div>
+  <div id="vista-previsao" hidden>
+<!--CORPO-PREVISAO-->
+  </div>
+  <div id="vista-fontes" hidden>
+<!--CORPO-FONTES-->
+  </div>
+</div>
+
+<div class="modal" id="modal-celular" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="mc-tit">
+    <div class="modal-topo"><h2 id="mc-tit"><i class="ic" data-ic="smartphone"></i> Controle pelo celular</h2><button class="btn" id="bt-fechar-celular">Fechar</button></div>
+    <p class="sutil" id="mc-arquivo" style="margin:0;font-size:.88rem">Para controlar pelo celular, o site precisa estar hospedado (GitHub Pages, por exemplo) ou aberto pelo <span class="mono">servidor.py</span>. Aberto direto do arquivo, o celular não consegue acessar a página.</p>
+    <div id="mc-config" class="mc-config">
+      <p style="margin:0;font-size:.88rem">O computador e o celular trocam mensagens por um broker MQTT na internet, com um código de sala só desta apresentação.</p>
+      <label>Broker (WebSocket seguro)<input id="mc-broker" class="mono" spellcheck="false"></label>
+      <details><summary>Usuário e senha (só se o broker pedir)</summary>
+        <label>Usuário<input id="mc-usuario" autocomplete="off"></label>
+        <label>Senha<input id="mc-senha" type="password" autocomplete="off"></label>
+        <p class="sutil" style="margin:0;font-size:.78rem">Use uma credencial só para a demo: ela vai junto no QR code e fica visível no navegador.</p>
+      </details>
+      <button class="btn primario" id="bt-mc-conectar">Conectar e gerar o QR code</button>
+    </div>
+    <div id="mc-conectado" class="mc-config" hidden>
+      <span class="pill" id="mc-estado"></span>
+      <div class="mc-qr" id="mc-qr"></div>
+      <p class="mono mc-url" id="mc-url"></p>
+      <p class="sutil" style="margin:0;font-size:.85rem">Aponte a câmera do celular para o código. A simulação passa para o celular sem perder o estado, e este painel continua mostrando tudo.</p>
+      <p class="sutil" style="margin:0;font-size:.78rem" id="mc-outros"></p>
+      <button class="btn" id="bt-mc-desligar">Desconectar e trocar de sala</button>
+    </div>
+  </div>
+</div>
+
+<div class="gaveta" id="gaveta" hidden>
+  <div class="gaveta-topo"><h2>Simulador nesta aba</h2><button class="btn" id="bt-fechar-gaveta">Fechar</button></div>
+  <p class="sutil" style="margin:0 0 12px;font-size:.85rem">Para apresentar com duas telas, use "Abrir o simulador": a simulação passa para a outra aba sem perder o estado.</p>
+  <div class="controles" id="controles-internos"></div>
+</div>

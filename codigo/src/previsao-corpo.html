@@ -1,0 +1,36 @@
+  <div class="barra-pv">
+    <div class="chips"><span class="chip neutro" id="pv-chip-fonte">Carregando</span><span class="chip neutro" id="pv-chip-lote"></span></div>
+    <div class="acoes-topo" role="group" aria-label="Fonte da previsão"><button class="btn" id="pv-real"><i class="ic" data-ic="cloud-sun"></i>Previsão real (Open-Meteo)</button><button class="btn" id="pv-sim">Clima simulado</button></div>
+  </div>
+  <div class="aviso" id="pv-aviso" hidden><span id="pv-aviso-txt"></span></div>
+
+  <section class="dias" id="pv-dias" aria-label="Previsão por dia"></section>
+
+  <main class="grade">
+    <article class="card s12">
+      <header><h2><i class="ic" data-ic="thermometer"></i>Temperatura: ar previsto e água estimada</h2>
+        <div class="legenda"><span><i style="--c:var(--ar)"></i>ar</span><span><i style="--c:var(--accent)"></i>água estimada</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div>
+      </header>
+      <canvas class="grafico" id="pv-g-temp" role="img" aria-label="Temperatura do ar prevista e da água estimada para os próximos 7 dias"></canvas>
+      <p class="fonte-zona" data-zona="temp"></p>
+    </article>
+
+    <article class="card s12">
+      <header><h2><i class="ic" data-ic="activity"></i>Oxigênio dissolvido estimado</h2>
+        <div class="legenda"><span><i class="tr" style="--c:var(--crit)"></i>sem aeração</span><span><i style="--c:var(--accent)"></i>com a regra do gêmeo</span><span><i class="bloco" style="--c:var(--accent)"></i>aerador ligado</span><span><i class="bloco" style="--c:var(--ok)"></i>ideal</span><span><i class="bloco" style="--c:var(--warn)"></i>atenção</span><span><i class="bloco" style="--c:var(--crit)"></i>crítica</span></div>
+      </header>
+      <canvas class="grafico" id="pv-g-od" role="img" aria-label="Oxigênio dissolvido estimado para os próximos 7 dias, com e sem aeração"></canvas>
+      <p class="fonte-zona" data-zona="od"></p>
+    </article>
+
+    <article class="card s8">
+      <header><h2><i class="ic" data-ic="triangle-alert"></i>Possíveis consequências, dia a dia</h2><span class="sutil" style="font-size:.8rem">fontes entre parênteses</span></header>
+      <div class="tabela-rolagem"><table class="consequencias"><thead><tr><th>Dia</th><th>Água</th><th>OD mín. sem aeração</th><th>Aerador</th><th>Ração</th><th>O que esperar</th></tr></thead><tbody id="pv-tab"></tbody></table></div>
+    </article>
+
+    <aside class="card s4">
+      <header><h2><i class="ic" data-ic="calendar-days"></i>Resumo da semana</h2></header>
+      <div class="resumo-semana" id="pv-resumo"></div>
+      <p class="sutil" style="margin:0;font-size:.78rem" id="pv-metodo"></p>
+    </aside>
+  </main>

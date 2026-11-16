@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1400, height: 1000 } });
+  const errs = []; ctx.on('weberror', e => errs.push('weberror ' + e.error().message));
+  const p = await ctx.newPage(); p.on('console', m => { if (m.type() === 'error') errs.push('painel ' + m.text()); }); p.on('pageerror', e => errs.push('painel pageerror ' + e.message));
+  await p.goto('http://localhost:8765/index.html'); await p.waitForTimeout(4000);
+  console.log('modo1', await p.evaluate(() => window.__est.modo), await p.textContent('#chip-fonte'));
+  await p.screenshot({ path: 'test/painel1.png', fullPage: true });
+  const s = await ctx.newPage(); s.on('console', m => { if (m.type() === 'error') errs.push('sim ' + m.text()); }); s.on('pageerror', e => errs.push('sim pageerror ' + e.message));
+  await s.goto('http://localhost:8765/simulador.html'); await s.waitForTimeout(3000);
+  console.log('modo2', await p.evaluate(() => window.__est.modo), await p.textContent('#chip-fonte'), await s.textContent('#chip-painel'));
+  await s.click('text=15 min/s'); await s.click('[data-ev=algas]'); await s.waitForTimeout(12000);
+  await s.screenshot({ path: 'test/sim1.png', fullPage: true });
+  await p.bringToFront(); await p.waitForTimeout(500);
+  await p.screenshot({ path: 'test/painel2.png', fullPage: true });
+  console.log('alertas', await p.textContent('#alertas'));
+  console.log('acoes', (await p.textContent('#acoes')).slice(0, 400));
+  console.log(errs.join('\n') || 'sem erros');
+  await b.close();
+})();

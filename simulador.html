@@ -1,0 +1,2073 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador do Viveiro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: faixa de status no topo, linha de leituras, grade de 12 colunas com o OD como peça central */
+:root {
+  --bg: #edf2f0; --surface: #ffffff; --surface-2: #e3ebe8; --ink: #10262a; --ink-2: #4d6266; --ink-3: #7a8d8f;
+  --line: #cfdbd7; --accent: #0b6f6a; --accent-soft: #d3ebe7; --racao: #b97a12; --ar: #6b5fa6;
+  --ok: #23845a; --ok-soft: #dcefe4; --warn: #b8700a; --warn-soft: #f8ead0; --crit: #bf3626; --crit-soft: #f7dcd7;
+  --font-ui: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-num: "Barlow Semi Condensed", "Barlow", "Arial Narrow", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1216; --surface: #171b21; --surface-2: #222830; --ink: #e7eaef; --ink-2: #a5aebb; --ink-3: #6f7a88;
+  --line: #2c333d; --accent: #45b8ac; --accent-soft: #1b2f30; --racao: #e5a842; --ar: #a99be6;
+  --ok: #4cc38a; --ok-soft: #16291f; --warn: #eaa53c; --warn-soft: #2f2513; --crit: #f0705e; --crit-soft: #351b1a; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #171b21; --surface-2: #222830; --ink: #e7eaef; --ink-2: #a5aebb; --ink-3: #6f7a88;
+  --line: #2c333d; --accent: #45b8ac; --accent-soft: #1b2f30; --racao: #e5a842; --ar: #a99be6;
+  --ok: #4cc38a; --ok-soft: #16291f; --warn: #eaa53c; --warn-soft: #2f2513; --crit: #f0705e; --crit-soft: #351b1a; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 32px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+h1, h2, h3 { font-family: var(--font-num); text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h2 { font-size: 1.05rem; font-weight: 600; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono); font-size: .8rem; }
+.rotulo { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); font-weight: 600; }
+.sutil { color: var(--ink-2); }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+.wrap { max-width: 1380px; margin: 0 auto; }
+
+/* barra de status */
+.topo { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding-block: 14px 12px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.marca { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin-right: auto; }
+.marca h1 { font-size: 1.45rem; font-weight: 700; line-height: 1.1; }
+.marca h1 span { color: var(--accent); }
+.marca p { margin: 0; font-size: .85rem; color: var(--ink-2); }
+.relogio { display: flex; align-items: baseline; gap: 10px; }
+.relogio .hora { font-family: var(--font-num); font-size: 2rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+.relogio .data { font-size: .85rem; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.warn { background: var(--warn-soft); color: var(--warn); } .chip.crit { background: var(--crit-soft); color: var(--crit); }
+.chip.neutro::before { display: none; }
+.acoes-topo { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: .88rem; text-decoration: none; color: var(--ink); }
+.btn:hover { border-color: var(--accent); }
+.btn.primario { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.ativo { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn.perigo { border-color: var(--crit); color: var(--crit); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* leituras */
+.leituras { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 10px; display: grid; gap: 4px; position: relative; overflow: hidden; min-width: 0; }
+.tile::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--estado, transparent); }
+.tile[data-estado="ok"] { --estado: var(--ok); } .tile[data-estado="atencao"] { --estado: var(--warn); } .tile[data-estado="critico"] { --estado: var(--crit); background: color-mix(in srgb, var(--crit-soft) 55%, var(--surface)); }
+.tile .valor { font-family: var(--font-num); font-size: 2rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile .valor small { font-size: .9rem; font-weight: 500; color: var(--ink-2); margin-left: 3px; }
+.tile .ref { font-size: .75rem; color: var(--ink-3); }
+.tile canvas { width: 100%; height: 30px; display: block; }
+.tile .linha2 { display: flex; justify-content: space-between; gap: 8px; font-size: .78rem; color: var(--ink-2); }
+
+/* grade principal */
+.grade { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.card header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.s8 { grid-column: span 8; } .s4 { grid-column: span 4; } .s6 { grid-column: span 6; } .s5 { grid-column: span 5; } .s7 { grid-column: span 7; } .s12 { grid-column: span 12; }
+@media (max-width: 980px) { .s8, .s4, .s6, .s5, .s7 { grid-column: span 12; } }
+.grafico { width: 100%; height: 260px; display: block; }
+.grafico.baixo { height: 200px; }
+.legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .78rem; color: var(--ink-2); }
+.legenda i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: var(--c); }
+.legenda i.tr { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+.legenda i.bloco { height: 10px; opacity: .35; }
+.resumo-od { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kv { display: grid; gap: 2px; }
+.kv b { font-family: var(--font-num); font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* aerador */
+.aerador-estado { display: flex; align-items: center; gap: 14px; }
+.helice { width: 54px; height: 54px; flex: none; color: var(--ink-3); }
+.ligado .helice { color: var(--accent); animation: girar 1.2s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ligado .helice { animation: none; } }
+.aerador-estado .grande { font-family: var(--font-num); font-size: 1.8rem; font-weight: 700; line-height: 1; }
+.botoes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.recomendacao { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: .9rem; }
+.recomendacao strong { display: block; font-family: var(--font-num); font-size: 1.05rem; }
+
+/* ração */
+.racao-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.racao-total .grande { font-family: var(--font-num); font-size: 2.6rem; font-weight: 700; color: var(--racao); line-height: 1; font-variant-numeric: tabular-nums; }
+.barra-comp { height: 8px; border-radius: 4px; background: var(--surface-2); position: relative; overflow: hidden; }
+.barra-comp span { position: absolute; inset: 0 auto 0 0; background: var(--racao); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2); font-weight: 600; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+.tabela-rolagem { overflow-x: auto; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: var(--surface-2); color: var(--ink-2); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.warn { background: var(--warn-soft); color: var(--warn); } .pill.crit { background: var(--crit-soft); color: var(--crit); }
+
+/* alertas */
+.lista { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.alerta { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.alerta .marcador { grid-row: span 2; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--ink-3); }
+.alerta.critico { background: var(--crit-soft); } .alerta.critico .marcador { background: var(--crit); }
+.alerta.atencao { background: var(--warn-soft); } .alerta.atencao .marcador { background: var(--warn); }
+.alerta b { font-size: .92rem; } .alerta span { font-size: .84rem; color: var(--ink-2); }
+.vazio { color: var(--ink-2); font-size: .9rem; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 210px; overflow-y: auto; font-size: .84rem; }
+.log li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; }
+.log li.sutil { display: block; }
+.log time { color: var(--ink-3); font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+/* arquitetura */
+.fluxo { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.fluxo div { flex: 1 1 160px; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: .84rem; min-width: 0; }
+.fluxo div b { display: block; font-family: var(--font-num); font-size: .98rem; }
+.fluxo .seta { flex: 0 0 auto; background: none; padding: 0; align-self: center; color: var(--ink-3); font-size: 1.2rem; }
+@media (max-width: 700px) { .fluxo .seta { display: none; } }
+
+/* simulador */
+.controles { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.eventos { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+.evento { text-align: left; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); display: grid; gap: 2px; }
+.evento:hover { border-color: var(--accent); background: var(--accent-soft); }
+.evento b { font-family: var(--font-num); font-size: 1rem; }
+.evento span { font-size: .8rem; color: var(--ink-2); }
+.evento.ativo { border-color: var(--accent); background: var(--accent-soft); }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding-block: 6px; border-bottom: 1px solid var(--line); }
+.slider:last-child { border-bottom: 0; }
+.slider label { font-weight: 600; font-size: .9rem; }
+.slider output { font-family: var(--font-num); font-size: 1.2rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.slider input[type=range] { grid-column: span 2; width: 100%; accent-color: var(--accent); }
+.slider .opcoes { grid-column: span 2; display: flex; gap: 12px; flex-wrap: wrap; font-size: .8rem; color: var(--ink-2); }
+.alternar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-block: 8px; border-bottom: 1px solid var(--line); }
+.alternar:last-child { border-bottom: 0; }
+.alternar label { font-weight: 600; font-size: .9rem; }
+.alternar small { display: block; font-weight: 400; color: var(--ink-2); font-size: .8rem; }
+.troca { appearance: none; width: 44px; height: 24px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); position: relative; cursor: pointer; flex: none; }
+.troca::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-3); transition: transform .15s; }
+.troca:checked { background: var(--accent); border-color: var(--accent); }
+.troca:checked::after { transform: translateX(20px); background: var(--surface); }
+.velocidades { display: flex; flex-wrap: wrap; gap: 4px; }
+.velocidades .btn { padding: 6px 10px; font-size: .8rem; }
+.mensagens { font-family: var(--font-mono); font-size: .76rem; background: var(--surface-2); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; white-space: pre; line-height: 1.55; }
+.mensagens .top { color: var(--accent); }
+.comp td:nth-child(2), .comp td:nth-child(3), .comp th:nth-child(2), .comp th:nth-child(3) { text-align: right; }
+.melhor { color: var(--ok); font-weight: 700; }
+
+/* gaveta do simulador interno */
+.gaveta { position: fixed; inset: 0 0 0 auto; width: min(560px, 100%); background: var(--bg); border-left: 1px solid var(--line); z-index: 20; overflow-y: auto;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 16px; box-shadow: -12px 0 30px rgba(0,0,0,.18); }
+.gaveta .controles > * { grid-column: span 12 !important; }
+.gaveta-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.aviso { padding: 10px 14px; border-radius: 8px; background: var(--warn-soft); color: var(--ink); margin-bottom: 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+
+.fonte-zona { margin: 0; font-size: .78rem; color: var(--ink-3); }
+.fonte-zona b { color: var(--ink-2); font-weight: 600; }
+
+/* navegação entre as páginas */
+.abas { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: -4px; }
+.abas a, .abas button { font-family: inherit; cursor: pointer; background: none; padding: 4px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; color: var(--ink-2); text-decoration: none; border: 1px solid transparent; }
+.abas a:hover, .abas button:hover { color: var(--accent); border-color: var(--line); }
+.abas a[aria-current="page"], .abas button[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+/* aba Previsão */
+.dias { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+@media (max-width: 980px) { .dias { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); } }
+.dia { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 4px; position: relative; overflow: hidden; min-width: 0; }
+.dia::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--estado, transparent); }
+.dia[data-estado="ok"] { --estado: var(--ok); } .dia[data-estado="atencao"] { --estado: var(--warn); } .dia[data-estado="critico"] { --estado: var(--crit); }
+.dia .nome { font-weight: 700; font-size: .95rem; } .dia .nome small { font-weight: 500; color: var(--ink-2); margin-left: 4px; }
+.dia .temps { font-family: var(--font-num); font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dia .temps small { font-size: .95rem; color: var(--ink-2); font-weight: 500; }
+.dia .det { font-size: .76rem; color: var(--ink-2); display: grid; gap: 1px; }
+.dia .agua { font-size: .8rem; font-weight: 600; }
+table.consequencias td { vertical-align: top; }
+table.consequencias ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+table.consequencias li.critico::marker { color: var(--crit); } table.consequencias li.atencao::marker { color: var(--warn); }
+.ref { color: var(--ink-3); font-size: .76rem; }
+.limiar { color: var(--warn); font-size: .72rem; font-weight: 600; }
+.resumo-semana { display: grid; gap: 12px; }
+/* aba Fontes */
+.biblio { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: .86rem; }
+.biblio a { color: var(--accent); word-break: break-all; }
+.pill.info { background: var(--accent-soft); color: var(--accent); }
+.tabela-rolagem { overflow-x: auto; }
+.pill { white-space: nowrap; }
+.barra-pv { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+/* blocos de leitura com altura estável: o rodapé nunca quebra linha */
+.tile .linha2 { white-space: nowrap; min-height: 1.3em; font-variant-numeric: tabular-nums; }
+.tile .linha2 span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tile .linha2 span:first-child { flex: 0 1 auto; } .tile .linha2 span:last-child { flex: 0 1 auto; text-align: right; }
+.tile .linha2 span:empty { display: none; }
+.tile .rotulo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .valor { white-space: nowrap; }
+.chip { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---- refinamento visual: ícones Lucide, cartões com elevação, régua de zonas ---- */
+:root { --r: 14px; --sombra: 0 1px 2px rgb(16 38 42 / .06), 0 4px 14px -6px rgb(16 38 42 / .10); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sombra: 0 1px 2px rgb(0 0 0 / .35), 0 6px 18px -8px rgb(0 0 0 / .5); } }
+:root[data-theme="dark"] { --sombra: 0 1px 2px rgb(0 0 0 / .35), 0 6px 18px -8px rgb(0 0 0 / .5); }
+.ic { width: 1.05em; height: 1.05em; flex: none; vertical-align: -0.16em; }
+.card, .tile, .dia { box-shadow: var(--sombra); border-color: color-mix(in srgb, var(--line) 70%, transparent); }
+.card h2 { display: inline-flex; align-items: center; gap: 8px; }
+.card h2 .ic { color: var(--accent); width: 1.1em; height: 1.1em; padding: 5px; box-sizing: content-box; border-radius: 8px; background: var(--accent-soft); }
+.tile .rotulo { display: flex; align-items: center; gap: 6px; }
+.tile .rotulo .ic { color: var(--accent); }
+.tile::after { width: 3px; }
+.btn .ic { margin-right: 2px; }
+.abas { gap: 0; margin-bottom: 0; }
+.abas a, .abas button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 0; border-radius: 0; background: var(--surface-2); }
+.abas > :first-child { border-radius: 999px 0 0 999px; padding-left: 16px; } .abas > :last-child { border-radius: 0 999px 999px 0; padding-right: 16px; }
+.abas a[aria-current="page"], .abas button[aria-current="page"] { border-radius: 999px; }
+.abas a[aria-current="page"], .abas button[aria-current="page"] { background: var(--surface); color: var(--accent); box-shadow: var(--sombra); }
+.regua-linha { display: flex; align-items: center; gap: 8px; min-height: 18px; }
+.regua-linha .regua { flex: 1; }
+.selo { font-size: .68rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.selo:empty { visibility: hidden; }
+.selo { min-width: 52px; text-align: center; }
+.selo[data-nivel="ideal"] { background: var(--ok-soft); color: var(--ok); }
+.selo[data-nivel="atencao"] { background: var(--warn-soft); color: var(--warn); }
+.selo[data-nivel="critico"], .selo[data-nivel="morte"] { background: var(--crit-soft); color: var(--crit); }
+.regua { position: relative; height: 5px; border-radius: 999px; opacity: .85; margin: 2px 0 1px; }
+.regua b { position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 2.5px solid var(--ink); transform: translate(-50%, -50%); transition: left .4s ease; }
+.leituras { gap: 12px; }
+.tile .valor { font-size: 2.1rem; }
+
+/* linha das abas com o botão de tema */
+.linha-abas { flex-basis: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.linha-abas .abas { flex-basis: auto; }
+.bt-tema { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); padding: 0; }
+.bt-tema:hover { color: var(--accent); border-color: var(--accent); }
+.bt-tema .ic { width: 17px; height: 17px; }
+.bt-tema .ic-lua { display: none; }
+:root[data-theme="dark"] .bt-tema .ic-sol { display: none; } :root[data-theme="dark"] .bt-tema .ic-lua { display: inline; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bt-tema .ic-sol { display: none; } :root:not([data-theme="light"]) .bt-tema .ic-lua { display: inline; } }
+
+/* janela do QR code */
+.modal { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .45); display: grid; place-items: center; padding: 16px; }
+.modal-caixa { background: var(--surface); color: var(--ink); border-radius: var(--r); box-shadow: var(--sombra); padding: 18px; width: min(420px, 100%); display: grid; gap: 12px; }
+.modal-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.modal-topo h2 { display: inline-flex; align-items: center; gap: 8px; }
+.mc-qr { background: #fff; border-radius: 10px; padding: 10px; width: min(260px, 100%); margin: 0 auto; }
+.mc-qr svg { display: block; width: 100%; height: auto; }
+.mc-url { text-align: center; font-size: .95rem; word-break: break-all; margin: 0; color: var(--accent); }
+.mc-config { display: grid; gap: 10px; }
+.mc-config label { display: grid; gap: 4px; font-size: .8rem; color: var(--ink-2); font-weight: 600; }
+.mc-config input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: .9rem; }
+.mc-config details { display: grid; gap: 8px; font-size: .85rem; } .mc-config summary { cursor: pointer; color: var(--ink-2); }
+.mc-config details[open] label { margin-top: 8px; }
+#mc-estado { justify-self: center; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topo">
+    <div class="linha-abas"><nav class="abas" aria-label="Páginas do protótipo"><a href="index.html">Painel</a><a href="previsao.html">Previsão 7 dias</a><a href="simulador.html" aria-current="page">Simulador</a><a href="fontes.html">Fontes</a></nav><button class="bt-tema" id="bt-tema" type="button" aria-label="Alternar tema claro e escuro" title="Tema claro / escuro"><span class="ic-sol"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /> <path d="M12 2v2" /> <path d="M12 20v2" /> <path d="m4.93 4.93 1.41 1.41" /> <path d="m17.66 17.66 1.41 1.41" /> <path d="M2 12h2" /> <path d="M20 12h2" /> <path d="m6.34 17.66-1.41 1.41" /> <path d="m19.07 4.93-1.41 1.41" /></svg></span><span class="ic-lua"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg></span></button></div>
+    <div class="marca">
+      <h1>Simulador <span>· Viveiro 1</span></h1>
+      <p>A contraparte física virtual: aqui você muda o que os sensores do ESP32 mediriam</p>
+    </div>
+    <div class="relogio"><span class="hora" id="hora">--:--</span><span class="data" id="data">iniciando</span></div>
+    <div class="chips">
+      <span class="chip" id="chip-painel">Painel</span>
+      <span class="chip" id="chip-net">Internet</span>
+      <span class="chip neutro" id="chip-vel"></span>
+      <span class="chip" id="chip-rede" hidden></span>
+    </div>
+    <div class="acoes-topo"><a class="btn" href="index.html">Abrir o painel</a></div>
+  </header>
+  <div class="controles" id="controles"></div>
+</div>
+
+<script>window.MODO_GEMEO = "simulador";</script>
+<script>
+/* =====================================================================
+   GÊMEO DIGITAL · VIVEIRO 1 · TILÁPIA-DO-NILO · GOIÂNIA (GO)
+   Parte 1: contraparte física virtual (clima, água, peixes, dispositivo)
+   e modelos do gêmeo (crescimento de Yi 1998, previsão híbrida de OD,
+   ração do dia, aeração e alertas). Roda no navegador e também no Node
+   (para testes), sem servidor e sem bibliotecas.
+   ===================================================================== */
+'use strict';
+
+/* ---------------- utilidades ---------------- */
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const H = 3600e3, MIN = 60e3, DIA = 24 * H;
+function rng(seed) {                       // gerador pseudoaleatório reprodutível
+  let s = seed >>> 0 || 1;
+  return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+}
+function gauss(r) { const u = Math.max(1e-9, r()), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+// O relógio simulado guarda a hora local de Goiânia codificada como UTC.
+const horaDe = t => { const d = new Date(t); return d.getUTCHours() + d.getUTCMinutes() / 60; };
+const mesDe = t => new Date(t).getUTCMonth();
+const diaDoAno = t => { const d = new Date(t); return Math.floor((t - Date.UTC(d.getUTCFullYear(), 0, 1)) / DIA) + 1; };
+const p2 = n => String(n).padStart(2, '0');
+const fmtHora = t => { const d = new Date(t); return p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()); };
+const fmtData = t => { const d = new Date(t); return p2(d.getUTCDate()) + '/' + p2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear(); };
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const fmtDiaMes = t => { const d = new Date(t); return d.getUTCDate() + ' ' + MESES[d.getUTCMonth()]; };
+
+/* ---------------- clima de Goiânia ----------------
+   Normais climatológicas 1991-2020 do INMET para Goiânia, tiradas dos balanços mensais
+   publicados pelo INMET [inmet]. Valores marcados "d" foram derivados (ver página Fontes):
+   maio e dezembro por interpolação ou pela normal da estação; médias ausentes = (máx+mín)/2 − 0,65 °C. */
+const NORMAIS = {
+  tmax:  [30.6, 31.0, 30.9, 31.2, 30.6 /*d*/, 30.0, 30.6, 32.3 /*d*/, 34.0, 33.2, 31.1, 31.1 /*d*/],
+  tmin:  [20.1, 20.0, 20.0, 19.3, 17.2 /*d*/, 15.2, 14.8, 16.8 /*d*/, 19.4, 20.3, 20.3, 20.2 /*d*/],
+  tmed:  [24.7 /*d*/, 24.7, 24.7, 24.8, 23.3 /*d*/, 22.0 /*d*/, 22.5, 24.5, 26.3, 26.2, 25.0, 25.0 /*d*/],
+  chuva: [249.2, 235.8, 258.5, 137.7, 30.3, 8.4, 1.5, 9.5, 44.3, 144.1, 219.6, 260.8 /*d*/],     // mm/mês
+  // sem fonte (parâmetros do simulador): umidade média e chance de dia chuvoso
+  ur:     [77, 76, 77, 72, 64, 56, 47, 41, 47, 62, 73, 78],
+  pchuva: [0.65, 0.57, 0.55, 0.33, 0.10, 0.03, 0.03, 0.07, 0.20, 0.43, 0.60, 0.68]
+};
+// pressão pela atmosfera padrão a 749 m de altitude (≈ 926 hPa)
+const PRESSAO_LOCAL = 1013.25 * Math.pow(1 - 2.25577e-5 * 749, 5.25588);
+const LAT = -16.68 * Math.PI / 180;
+function radiacaoCeuLimpo(t) {           // W/m², céu limpo, latitude de Goiânia
+  const doy = diaDoAno(t), h = horaDe(t);
+  const dec = 23.44 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + doy) / 365);
+  const ang = (h - 12.2) * 15 * Math.PI / 180;
+  const s = Math.sin(LAT) * Math.sin(dec) + Math.cos(LAT) * Math.cos(dec) * Math.cos(ang);
+  return s > 0 ? 1080 * Math.pow(s, 1.2) : 0;
+}
+
+class Clima {
+  constructor(seed) { this.r = rng(seed); this.dia = -1; this.anom = 0; this.chuvoso = false; this.nuvemDia = 0.85; this.Ta = 24; this.UR = 70; this.rad = 0; this.chuva = 0; this.vento = 1; this.pressao = 926; this.nuvem = 0.85; }
+  passo(t, ctl) {
+    const m = mesDe(t), h = horaDe(t), dia = Math.floor(t / DIA);
+    if (dia !== this.dia) {                // sorteios diários: anomalia térmica, chuva, nebulosidade
+      this.dia = dia;
+      const seco = NORMAIS.pchuva[m] < 0.2;
+      this.anom = 0.7 * this.anom + gauss(this.r) * (seco ? 1.6 : 1.0);
+      this.chuvoso = this.r() < NORMAIS.pchuva[m];
+      this.nuvemDia = this.chuvoso ? 0.35 + 0.25 * this.r() : (seco ? 0.86 + 0.12 * this.r() : 0.62 + 0.3 * this.r());
+      this.inicioChuva = 13 + 4 * this.r();
+      this.mmDia = NORMAIS.chuva[m] / (30 * Math.max(0.03, NORMAIS.pchuva[m]));
+    }
+    const chovendoAgora = (ctl.chuvaForcada || (this.chuvoso && h >= this.inicioChuva && h < this.inicioChuva + 3));
+    this.chuva = chovendoAgora ? (ctl.chuvaForcada ? 12 : this.mmDia / 3) : 0;
+    this.nuvem = ctl.nuvemManual != null ? ctl.nuvemManual : (chovendoAgora ? 0.25 : this.nuvemDia);
+    this.rad = radiacaoCeuLimpo(t) * this.nuvem;
+    // ciclo diário entre a mínima e a máxima normais do mês (INMET), mais a anomalia do dia
+    const meio = (NORMAIS.tmax[m] + NORMAIS.tmin[m]) / 2, amp = (NORMAIS.tmax[m] - NORMAIS.tmin[m]) / 2;
+    this.Ta = meio + this.anom + ctl.deltaTempAr + amp * Math.sin(2 * Math.PI * (h - 9) / 24) - (chovendoAgora ? 2.5 : 0);
+    this.UR = clamp(NORMAIS.ur[m] + 17 * Math.cos(2 * Math.PI * (h - 5) / 24) + (chovendoAgora ? 25 : 0) - ctl.deltaTempAr * 1.2, 15, 100);
+    this.vento = Math.max(0, 1.1 + 1.6 * Math.max(0, Math.sin(2 * Math.PI * (h - 8) / 24)) + 0.4 * gauss(this.r) * 0.5 + ctl.ventoExtra + (chovendoAgora ? 2 : 0));
+    this.pressao = PRESSAO_LOCAL + 1.2 * Math.cos(2 * Math.PI * (h - 10) / 12) + ctl.deltaTempAr * -0.3;
+  }
+}
+
+/* ---------------- modelo de crescimento de Yi (1998) ----------------
+   dW/dt = b(1-a)·h·τ(T)·δ(OD)·υ(NH3)·f·W^m − k(T)·W^n            [yi1998]
+   Parâmetros conforme a tabela de Dampin et al. (2012), que cita a origem de cada um [dampin2012]. */
+const YI = { h: 0.8, m: 0.67, n: 0.81, b: 0.62, a: 0.53, kmin: 0.00133, j: 0.0132, Tmin: 15, Topt: 33, Tmax: 41, DOcrit: 1.0, DOmin: 0.3, UIAcrit: 0.06, UIAmax: 1.4 };
+function tau(T) {
+  if (T <= YI.Tmin || T >= YI.Tmax) return 0;
+  const x = T < YI.Topt ? (YI.Topt - T) / (YI.Topt - YI.Tmin) : (T - YI.Topt) / (YI.Tmax - YI.Topt);
+  return Math.exp(-4.6 * Math.pow(x, 4));
+}
+const delta = od => od >= YI.DOcrit ? 1 : od <= YI.DOmin ? 0 : (od - YI.DOmin) / (YI.DOcrit - YI.DOmin);
+const upsilon = u => u <= YI.UIAcrit ? 1 : u >= YI.UIAmax ? 0 : (YI.UIAmax - u) / (YI.UIAmax - YI.UIAcrit);
+const kCatab = T => YI.kmin * Math.exp(YI.j * (T - YI.Tmin));
+/* Yi (1998) foi feito para viveiros fertilizados (alimento natural). Para ração extrusada usamos um
+   fator de equivalência E, derivado (não arbitrado) da conversão alimentar esperada da tabela SENAR
+   (2019): CA 1,3 para peixes de 150–250 g com 3,0% do peso vivo/dia em água de 25–28 °C [senar2019].
+   Resolve-se: ganho(W=200 g, T=26,5 °C, ração 3%) = ração / 1,3. */
+const E_RACAO = (() => {
+  const W = 200, T = 26.5, C = W * 0.030, CA = 1.3;
+  return (C / CA + kCatab(T) * Math.pow(W, YI.n)) / (YI.b * (1 - YI.a) * C);
+})();
+// saciedade (g de ração/peixe/dia) = ração máxima de Yi convertida por E
+const apetiteYi = (W, T, od, uia, alfa = 1) => alfa * YI.h * tau(T) * delta(od) * upsilon(uia) * Math.pow(W, YI.m) / E_RACAO;
+// ganho diário (g/dia) dado o consumo de ração C (g/peixe/dia)
+const ganhoYi = (W, T, C, alfa = 1) => YI.b * (1 - YI.a) * alfa * E_RACAO * C - kCatab(T) * Math.pow(W, YI.n);
+
+/* ---------------- química da água ---------------- */
+// saturação de O2 em água doce (mg/L), Benson e Krause (1984) [benson1984]; correção de pressão simplificada (proporcional)
+function odSat(T, p = 1013.25) {
+  const K = T + 273.15;
+  const ln = -139.34411 + 1.575701e5 / K - 6.642308e7 / (K * K) + 1.2438e10 / (K * K * K) - 8.621949e11 / (K * K * K * K);
+  return Math.exp(ln) * p / 1013.25;
+}
+// fração de amônia não ionizada: pKa = 0,09018 + 2729,92/T(K), Emerson et al. (1975) [emerson1975]
+const fracNH3 = (T, pH) => 1 / (1 + Math.pow(10, 0.09018 + 2729.92 / (T + 273.15) - pH));
+
+/* tabela de arraçoamento para viveiro escavado, SENAR (2019), Tabela 1 [senar2019]:
+   [peso máximo da faixa (g), % do peso vivo/dia, refeições/dia, CA esperada] */
+const TABELA_RACAO = [[5, 14.0, 5, 1.0], [10, 8.0, 4, 1.0], [20, 5.0, 3, 1.1], [50, 4.5, 3, 1.1], [150, 3.4, 3, 1.2], [250, 3.0, 3, 1.3],
+  [400, 2.2, 2, 1.4], [600, 1.4, 2, 1.6], [800, 1.0, 2, 1.7], [Infinity, 0.8, 2, 1.8]];
+const faixaTabela = W => TABELA_RACAO.find(([lim]) => W <= lim);
+const pctTabela = W => faixaTabela(W)[1];
+const refeicoesTabela = W => faixaTabela(W)[2];
+
+/* consumo de O2 da tilápia-do-nilo (mg O2/kg/h) por peso e temperatura, Kim e Jo (1999) [kimjo1999];
+   interpolação log-linear entre os pontos medidos (4, 40, 120, 400 g; 20, 25, 30 °C) */
+const KJ = { W: [4, 40, 120, 400], T: [20, 25, 30], v: [[318.8, 435.2, 611.1], [214.9, 345.9, 538.4], [84.1, 151.5, 320.8], [69.4, 115.9, 236.0]] };
+function consumoO2Tilapia(W, T) {
+  const lw = Math.log(clamp(W, 4, 400));
+  let i = 0; while (i < 2 && lw > Math.log(KJ.W[i + 1])) i++;
+  const fw = (lw - Math.log(KJ.W[i])) / (Math.log(KJ.W[i + 1]) - Math.log(KJ.W[i]));
+  const linha = KJ.T.map((_, k) => Math.log(KJ.v[i][k]) * (1 - fw) + Math.log(KJ.v[i + 1][k]) * fw);
+  const Tc = clamp(T, 12, 34), k = Tc <= 25 ? 0 : 1;
+  const ft = (Tc - KJ.T[k]) / 5;
+  return Math.exp(linha[k] + (linha[k + 1] - linha[k]) * ft);
+}
+/* aerador de pás de 1 cv (0,75 kW) com eficiência padrão de 3,0 kg O2/kWh, no meio da faixa de
+   2,7–3,4 kg O2/kWh de Tucker (2005) [tucker2005]: kLa = SOTR / (V · ODsat a 20 °C) */
+const POTENCIA_AERADOR_KW = 0.75;
+
+/* ---------------- viveiro (verdade simulada) ---------------- */
+const VIVEIRO = { area: 1000, prof: 1.2, vol: 1200 };
+const KLA_AERADOR = 3.0 * POTENCIA_AERADOR_KW * 1000 / (VIVEIRO.vol * odSat(20));   // ≈ 0,21 por hora
+class Viveiro {
+  constructor(nome, N, W, Tw) {
+    Object.assign(this, { nome, N, N0: N, W, Tw, OD: 7, pH: 7.6, TAN: 0.4, carga: 10, intestino: 0, aerador: false, algas: 1 });
+    this.ac = { racao: 0, consumida: 0, desperdicio: 0, horasAerador: 0, odMin: 99, mortos: 0, biomassa0: N * W / 1000 };
+    this.ultimaBiometria = { t: 0, W };
+  }
+  get biomassa() { return this.N * this.W / 1000; }   // kg
+  get uia() { return this.TAN * fracNH3(this.Tw, this.pH); }
+  passo(dtMin, clima, ctl, verdade) {
+    const dt = dtMin / 60;  // horas
+    // temperatura da água: tende à temperatura do ar com atraso de ~10 h, de modo que a média diária
+    // da água fica perto da média do ar (Rotta et al., 2023) [rotta2023]; o atraso é do simulador
+    this.Tw += (clima.Ta - this.Tw) * dt / 10;
+    const Tw = this.Tw, sat = odSat(Tw, clima.pressao);
+    // balanço de oxigênio (mg/L/h): estrutura de Boyd et al. (1978) e Romaire e Boyd (1979) [boyd1978, romaire1979]:
+    // fotossíntese ∝ radiação; respiração do plâncton e do fundo; respiração dos peixes; difusão; aerador.
+    // Coeficientes de fotossíntese, respiração da água e difusão: calibrados no simulador (sem fonte).
+    const P = 2.3 * this.algas * clima.rad / 1000 * Math.pow(1.036, Tw - 20);
+    const Rw = (0.22 * Math.pow(1.07, Tw - 20)) * ctl.respExtra + 0.01 * this.carga;
+    const cPeixe = consumoO2Tilapia(this.W, Tw) * clamp(this.OD / 2.5, 0, 1) * (1 + 0.6 * this.intestino / Math.max(1, this.W * 0.01));
+    const Rf = this.biomassa / VIVEIRO.vol * cPeixe / 1000;
+    const kSup = 0.03 + 0.015 * clima.vento;
+    const aerando = this.aerador && !ctl.falhaAerador;
+    const Aer = aerando ? KLA_AERADOR : 0;
+    this.OD = clamp(this.OD + (P - Rw - Rf + (kSup + Aer) * (sat - this.OD)) * dt, 0, 25);
+    if (aerando) this.ac.horasAerador += dt;
+    // pH acompanha o CO2 (fotossíntese x respiração)
+    const pHalvo = 7.4 + 0.9 * Math.log2(clamp(this.OD / sat, 0.3, 3));
+    this.pH += (pHalvo - this.pH) * dt * 0.6;
+    // digestão e crescimento (Yi 1998, com eficiência "real" diferente da literatura)
+    const proc = this.intestino * Math.min(1, dt / 4);
+    this.intestino -= proc;
+    const T = Tw, uia = this.uia;
+    const dW = verdade.alfa * YI.b * (1 - YI.a) * E_RACAO * proc - kCatab(T) * Math.pow(this.W, YI.n) * dt / 24;
+    this.W = Math.max(1, this.W + dW);
+    // nitrogênio amoniacal e carga orgânica
+    const decomp = this.carga * 0.01 * dt;
+    this.carga -= decomp;
+    this.TAN = Math.max(0, this.TAN + decomp * 0.04 - this.TAN * 0.04 * dt * (0.8 + 0.5 * clima.rad / 800));
+    // mortalidade por hipóxia, amônia e temperatura
+    let mort = 0;
+    // limiares: OD de 1,0–1,5 mg/L por algumas horas pode matar (Boyd, 2018a); abaixo de ~12 °C há risco de morte (Kubitza, 2011).
+    // As taxas por hora são do simulador (sem fonte).
+    if (this.OD < 1.0) mort += 0.03; else if (this.OD < 1.5) mort += 0.006;
+    if (uia > 1.0) mort += 0.004;
+    if (Tw <= 11) mort += 0.01;   // nobrega2020: mortalidade entre ~11 e 6 °C
+    const mortos = this.N * mort * dt;
+    this.N -= mortos; this.ac.mortos += mortos;
+    this.ac.odMin = Math.min(this.ac.odMin, this.OD);
+  }
+  // uma refeição: os peixes comem até o apetite; o resto vira desperdício e carga orgânica
+  alimentar(kg, fracaoDoDia, verdade) {
+    if (kg <= 0) return { ofertado: 0, consumido: 0 };
+    const comport = clamp((this.OD - 2.5) / 1.0, 0, 1);             // peixe com OD baixo come menos (SENAR: só alimentar com OD > 3); curva do simulador
+    const apet = apetiteYi(this.W, this.Tw, this.OD, this.uia, verdade.alfa) * comport * fracaoDoDia * this.N / 1000 * 1.15;
+    const cons = Math.min(kg, apet), desp = kg - cons;
+    this.intestino += cons * 1000 / this.N;
+    this.carga += (desp * 1.1 + cons * 0.25) * 1000 / VIVEIRO.vol;
+    this.TAN += cons * 1000 * 0.03 / VIVEIRO.vol;
+    Object.assign(this.ac, { racao: this.ac.racao + kg, consumida: this.ac.consumida + cons, desperdicio: this.ac.desperdicio + desp });
+    return { ofertado: kg, consumido: cons };
+  }
+}
+
+/* ---------------- cenários sazonais ---------------- */
+const CENARIOS = {
+  verao:   { nome: 'Verão chuvoso', detalhe: 'janeiro', inicio: Date.UTC(2027, 0, 12, 0), N: 4000, W: 110 },
+  inverno: { nome: 'Inverno seco', detalhe: 'julho', inicio: Date.UTC(2027, 6, 8, 0), N: 4000, W: 110 },
+  seca:    { nome: 'Fim da seca, calor', detalhe: 'setembro', inicio: Date.UTC(2027, 8, 14, 0), N: 4000, W: 110 }
+};
+const CONTROLES_PADRAO = () => ({ offsetOD: 0, deltaTempAr: 0, nuvemManual: null, chuvaForcada: false, ventoExtra: 0, respExtra: 1, falhaAerador: false, internet: true, manejo: 'gemeo', travas: {} });
+
+/* ---------------- simulador: relógio, dois viveiros e o ESP32 virtual ----------------
+   "principal" é o viveiro que o gêmeo acompanha e comanda.
+   "sombra" recebe o mesmo clima com manejo tradicional, para comparação. */
+const TOPICO = 'gemeo/viveiro1/';
+const PREAQUECIMENTO_DIAS = 35;
+class Simulador {
+  constructor(cenario = 'verao', seed = 7) { this.reiniciar(cenario, seed); }
+  reiniciar(cenario, seed = 7) {
+    const c = CENARIOS[cenario];
+    this.cenario = cenario; this.seed = seed;
+    this.ctl = CONTROLES_PADRAO();
+    this.clima = new Clima(seed);
+    this.verdade = { alfa: 1.08 };                      // eficiência real do lote (o gêmeo não conhece)
+    this.t = c.inicio - PREAQUECIMENTO_DIAS * DIA;
+    const Tw0 = NORMAIS.tmed[mesDe(c.inicio)];
+    this.v = new Viveiro('gemeo', c.N, c.W, Tw0);
+    this.s = new Viveiro('tradicional', c.N, c.W, Tw0);
+    this.historico = [];          // leituras a cada 10 min (o que o "banco" do gêmeo recebe)
+    this.diario = [];             // resumo diário (médias), guardado por todo o ciclo
+    this.acDia = null;
+    this.biometrias = [];         // pesagens
+    this.refeicoes = [];          // refeições do viveiro principal
+    this.eventos = [];
+    this.temporarios = [];        // efeitos de cenário com hora para acabar
+    this.origemAerador = 'tradicional';
+    this.modoAeracao = 'AUTO';
+    this.ultimoComando = -Infinity; // último contato do gêmeo (tempo simulado)
+    this.gemeoAtivo = false;       // há um painel do gêmeo conectado?
+    this.planoRacao = null;
+    this.r = rng(seed * 31 + 1);
+    this.amostra = 0;
+    // pré-aquecimento: 35 dias de histórico com manejo tradicional, para o painel abrir com dados
+    const passoAntes = this.ctl.manejo; this.ctl.manejo = 'tradicional';
+    this.preaquecendo = true;
+    while (this.t < c.inicio) this.avancar(10);
+    this.preaquecendo = false; this.ctl.manejo = passoAntes;
+    this.v.ac = { racao: 0, consumida: 0, desperdicio: 0, horasAerador: 0, odMin: 99, mortos: 0, biomassa0: this.v.biomassa };
+    this.s.ac = { racao: 0, consumida: 0, desperdicio: 0, horasAerador: 0, odMin: 99, mortos: 0, biomassa0: this.s.biomassa };
+    this.inicioComparacao = this.t;
+  }
+  // leitura dos sensores com ruído (o que o ESP32 publicaria)
+  leituras() {
+    const r = this.r, v = this.v, c = this.clima, n = s => gauss(r) * s;
+    const tr = this.ctl.travas;
+    return {
+      'agua/temperatura': +(tr.Tw ?? v.Tw + n(0.05)).toFixed(2),
+      'agua/od': +Math.max(0, (tr.OD ?? v.OD + n(0.06)) + this.ctl.offsetOD).toFixed(2),
+      'agua/ph': +(tr.pH ?? v.pH + n(0.02)).toFixed(2),
+      'agua/amonia_total': +Math.max(0, tr.TAN ?? v.TAN + n(0.01)).toFixed(2),
+      'clima/temperatura_ar': +(c.Ta + n(0.1)).toFixed(1),
+      'clima/umidade': +c.UR.toFixed(0),
+      'clima/radiacao': +c.rad.toFixed(0),
+      'clima/chuva': +c.chuva.toFixed(1),
+      'clima/vento': +c.vento.toFixed(1),
+      'clima/pressao': +c.pressao.toFixed(1),
+      'atuador/aerador': v.aerador ? 'LIGADO' : 'DESLIGADO',
+      'atuador/aerador_origem': this.origemAerador.toUpperCase().replace(/ /g, '_'),
+      'biomassa/quantidade': Math.round(v.N),
+      'status': this.ctl.internet ? 'ONLINE' : 'OFFLINE'
+    };
+  }
+  // aplica travas do apresentador no estado (o valor travado vira o estado real)
+  aplicarTravas() {
+    const tr = this.ctl.travas, v = this.v;
+    if (tr.Tw != null) v.Tw = tr.Tw;
+    if (tr.OD != null) v.OD = tr.OD;
+    if (tr.pH != null) v.pH = tr.pH;
+    if (tr.TAN != null) v.TAN = tr.TAN;
+  }
+  avancar(minutos) {
+    const out = [];
+    let resto = minutos;
+    while (resto > 0) {
+      const dt = Math.min(1, resto); resto -= dt;
+      const t0 = this.t; this.t += dt * MIN;
+      if (this.temporarios.length) this.expirarEfeitos();
+      this.clima.passo(this.t, this.ctl);
+      this.aplicarTravas();
+      this.v.passo(dt, this.clima, this.ctl, this.verdade);
+      this.s.passo(dt, this.clima, this.ctl, this.verdade);
+      this.aplicarTravas();
+      this.controleLocal(t0);
+      this.manejoTradicional(t0);
+      // biometria semanal às 07:00 (quinta-feira simulada) e amostragem do histórico a cada 10 min
+      if (Math.floor(t0 / DIA) !== Math.floor(this.t / DIA)) this.virouDia();
+      if (Math.floor(t0 / H) !== Math.floor(this.t / H) && Math.round(horaDe(this.t)) === 7 && new Date(this.t).getUTCDay() === 4) out.push(this.biometria());
+      if (Math.floor(t0 / (10 * MIN)) !== Math.floor(this.t / (10 * MIN))) { const am = this.amostraHistorico(); this.historico.push(am); this.acumularDia(am); }
+    }
+    const limite = this.t - 3 * DIA;
+    while (this.historico.length && this.historico[0].t < limite) this.historico.shift();
+    return out;
+  }
+  amostraHistorico() {
+    const L = this.leituras();
+    return { t: this.t, Tw: L['agua/temperatura'], OD: L['agua/od'], pH: L['agua/ph'], TAN: L['agua/amonia_total'], Ta: L['clima/temperatura_ar'], UR: L['clima/umidade'], rad: L['clima/radiacao'], chuva: L['clima/chuva'], vento: L['clima/vento'], aer: this.v.aerador ? 1 : 0, online: this.ctl.internet ? 1 : 0 };
+  }
+  virouDia() {
+    const a = this.acDia;
+    if (a && a.n) this.diario.push({ t: a.t, Tw: +(a.Tw / a.n).toFixed(2), OD: +(a.OD / a.n).toFixed(2), ODmin: +a.ODmin.toFixed(2), Ta: +(a.Ta / a.n).toFixed(2) });
+    this.acDia = { t: this.t, n: 0, Tw: 0, OD: 0, ODmin: 99, Ta: 0 };
+  }
+  acumularDia(am) {
+    if (!this.acDia) this.acDia = { t: Math.floor(this.t / DIA) * DIA, n: 0, Tw: 0, OD: 0, ODmin: 99, Ta: 0 };
+    const a = this.acDia; a.n++; a.Tw += am.Tw; a.OD += am.OD; a.Ta += am.Ta; a.ODmin = Math.min(a.ODmin, am.OD);
+  }
+  biometria() {
+    const W = this.v.W * (1 + gauss(this.r) * 0.02);
+    const b = { t: this.t, W: +W.toFixed(1), N: Math.round(this.v.N), Wsombra: +this.s.W.toFixed(1) };
+    this.biometrias.push(b);
+    this.v.ultimaBiometria = { t: this.t, W: b.W };
+    this.s.ultimaBiometria = { t: this.t, W: this.s.W * (1 + gauss(this.r) * 0.03) };
+    return { tipo: 'biometria', ...b };
+  }
+  // ESP32 virtual: sem o gêmeo (internet caída ou painel fechado) liga o aerador se OD < 3
+  controleLocal(t0) {
+    const gemeoPresente = this.ctl.internet && this.gemeoAtivo && (this.t - this.ultimoComando < 90 * MIN);
+    const v = this.v;
+    if (this.preaquecendo || (!gemeoPresente && this.ctl.manejo === 'gemeo') || this.ctl.manejo === 'tradicional') {
+      if (this.ctl.manejo === 'tradicional' || this.preaquecendo) {
+        // manejo tradicional: aerador ligado das 23h às 6h, mais o produtor ligando se o peixe boquejar
+        const h = horaDe(this.t);
+        const ligar = (h >= 23 || h < 6) || v.OD < 2;
+        if (ligar !== v.aerador) { v.aerador = ligar; this.origemAerador = 'tradicional'; }
+      } else {
+        if (v.OD < 3 && !v.aerador) { v.aerador = true; this.origemAerador = 'fallback local'; this.registrar('Fallback local: OD abaixo de 3 mg/L sem contato com o gêmeo, aerador ligado'); }
+        else if (v.OD > 5 && v.aerador) { v.aerador = false; this.origemAerador = 'fallback local'; this.registrar('Fallback local: OD acima de 5 mg/L, aerador desligado'); }
+      }
+    }
+    // intertravamento de segurança do ESP32: OD abaixo de 2,5 mg/L liga o aerador em qualquer modo
+    if (v.OD < 2.5 && !v.aerador) { v.aerador = true; this.origemAerador = 'seguranca local'; if (!this.preaquecendo) this.registrar('Segurança local: OD abaixo de 2,5 mg/L, aerador ligado'); }
+    // sombra: sempre tradicional
+    const h = horaDe(this.t), s = this.s;
+    s.aerador = (h >= 23 || h < 6) || s.OD < 2;
+  }
+  // tratador seguindo a tabela: 2 refeições (8h e 16h) pelo peso da última biometria, sem ajuste
+  manejoTradicional(t0) {
+    const h0 = horaDe(t0), h1 = horaDe(this.t);
+    const cruzou = hh => (h0 < hh && h1 >= hh) || (h1 < h0 && hh <= h1);
+    for (const hh of [8, 16]) if (cruzou(hh)) {
+      for (const viv of [this.s, this.v]) {
+        if (viv === this.v && !this.preaquecendo && this.ctl.manejo === 'gemeo' && this.gemeoAtivo && this.ctl.internet) continue;
+        const kg = viv.N * viv.ultimaBiometria.W * pctTabela(viv.ultimaBiometria.W) / 100 / 1000 / 2;
+        const r = viv.alimentar(kg, 0.5, this.verdade);
+        if (viv === this.v) this.refeicoes.push({ t: this.t, kg: +kg.toFixed(2), origem: 'tabela' });
+      }
+    }
+  }
+  // comando vindo do gêmeo (o que chegaria em gemeo/viveiro1/comando/...)
+  comando(topico, valor) {
+    if (!this.ctl.internet) return false;
+    this.ultimoComando = this.t; this.gemeoAtivo = true;
+    if (topico === 'servidor/status') return true;
+    if (topico === 'comando/aerador') {
+      const ligar = valor === 'LIGAR';
+      if (ligar !== this.v.aerador) this.registrar('Comando do gêmeo: aerador ' + (ligar ? 'ligado' : 'desligado'));
+      this.v.aerador = ligar; this.origemAerador = 'gemeo';
+    } else if (topico === 'comando/racao' && this.ctl.manejo === 'gemeo') {
+      const kg = +valor;
+      const r = this.v.alimentar(kg, 1 / Math.max(1, this.planoRefeicoes || 3), this.verdade);
+      this.refeicoes.push({ t: this.t, kg, origem: 'gemeo' });
+      // a sombra já come pela tabela no manejoTradicional
+    }
+    return true;
+  }
+  // efeito temporário: muda um controle (ou o viveiro) e desfaz depois de "horas" simuladas
+  efeito(chave, valor, horas, rotulo) {
+    this.temporarios = this.temporarios.filter(e => { if (e.chave === chave) { this.setar(chave, e.normal); return false; } return true; });
+    const normal = this.ler(chave);
+    this.setar(chave, valor);
+    if (horas) this.temporarios.push({ chave, normal, ate: this.t + horas * H, rotulo });
+    if (rotulo) this.registrar(rotulo);
+  }
+  ler(chave) { const [o, k] = chave.split('.'); return o === 'v' ? this.v[k] : this.ctl[k]; }
+  setar(chave, val) { const [o, k] = chave.split('.'); if (o === 'v') { this.v[k] = val; if (k === 'algas') this.s[k] = val; } else this.ctl[k] = val; }
+  expirarEfeitos() {
+    this.temporarios = this.temporarios.filter(e => { if (this.t >= e.ate) { this.setar(e.chave, e.normal); this.registrar('Fim do efeito: ' + (e.rotulo || e.chave)); return false; } return true; });
+  }
+  // previsão do tempo do mundo simulado: copia o estado e roda só o clima por N dias
+  // (o sorteio diário é refeito, então a previsão não é igual ao que vai acontecer, como na vida real)
+  previsaoClima(nDias = 7) {
+    const c = Simulador.restaurar(this.snapshot());
+    c.clima.r = rng((this.seed + 97) * 13 + Math.floor(this.t / DIA));
+    const dias = [];
+    const inicio = Math.floor(this.t / DIA) * DIA + DIA;
+    while (c.t < inicio) { c.t += 10 * MIN; c.expirarEfeitos(); c.clima.passo(c.t, c.ctl); }
+    for (let d = 0; d < nDias; d++) {
+      const acc = { t: c.t, tmax: -99, tmin: 99, chuva: 0, rad: 0, vento: 0 };
+      for (let k = 0; k < 144; k++) {
+        c.t += 10 * MIN; c.expirarEfeitos(); c.clima.passo(c.t, c.ctl);
+        acc.tmax = Math.max(acc.tmax, c.clima.Ta); acc.tmin = Math.min(acc.tmin, c.clima.Ta);
+        acc.chuva += c.clima.chuva / 6; acc.rad += c.clima.rad * 600 / 1e6; acc.vento = Math.max(acc.vento, c.clima.vento);
+      }
+      dias.push({ t: acc.t, tmax: +acc.tmax.toFixed(1), tmin: +acc.tmin.toFixed(1), chuva: +acc.chuva.toFixed(1), rad: +acc.rad.toFixed(1), vento: +acc.vento.toFixed(1) });
+    }
+    return dias;
+  }
+  registrar(txt) { this.eventos.push({ t: this.t, txt }); if (this.eventos.length > 60) this.eventos.shift(); }
+  comparacao() {
+    const f = (v) => {
+      const ganho = v.biomassa - v.ac.biomassa0;
+      return { racao: v.ac.racao, desperdicio: v.ac.desperdicio, ganho, ca: ganho > 0.5 ? v.ac.racao / ganho : null, horasAerador: v.ac.horasAerador, odMin: v.ac.odMin, mortos: v.ac.mortos, W: v.W, N: v.N };
+    };
+    return { dias: (this.t - this.inicioComparacao) / DIA, gemeo: f(this.v), tradicional: f(this.s) };
+  }
+  snapshot() { return JSON.parse(JSON.stringify(this, (k, val) => (k === 'r' ? undefined : val))); }
+  static restaurar(obj) {
+    const s = Object.create(Simulador.prototype);
+    Object.assign(s, obj);
+    s.clima = Object.assign(Object.create(Clima.prototype), obj.clima); s.clima.r = rng(obj.seed + Math.floor(obj.t / DIA));
+    s.v = Object.assign(Object.create(Viveiro.prototype), obj.v);
+    s.s = Object.assign(Object.create(Viveiro.prototype), obj.s);
+    s.r = rng(obj.seed * 31 + Math.floor(obj.t / MIN));
+    return s;
+  }
+}
+
+/* =====================================================================
+   O GÊMEO DIGITAL (lado do servidor/painel): só enxerga as leituras,
+   as biometrias e as refeições, nunca o estado interno do viveiro.
+   ===================================================================== */
+
+/* ---- previsão híbrida de OD ----
+   Estrutura física: dOD/dt = P·(rad/1000)·1,036^(T−20) − R·1,07^(T−20) + k·(ODsat−OD) + kA·aer·(ODsat−OD)
+   Parâmetros P, R, k, kA estimados dos dados das últimas 24 h (mínimos quadrados com prior). */
+function resolver(A, b) {            // eliminação de Gauss
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let i = 0; i < n; i++) {
+    let p = i; for (let k = i + 1; k < n; k++) if (Math.abs(M[k][i]) > Math.abs(M[p][i])) p = k;
+    [M[i], M[p]] = [M[p], M[i]];
+    if (Math.abs(M[i][i]) < 1e-12) return null;
+    for (let k = i + 1; k < n; k++) { const f = M[k][i] / M[i][i]; for (let j = i; j <= n; j++) M[k][j] -= f * M[i][j]; }
+  }
+  const x = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) { let s = M[i][n]; for (let j = i + 1; j < n; j++) s -= M[i][j] * x[j]; x[i] = s / M[i][i]; }
+  return x;
+}
+const PRIOR_OD = [2.4, 0.55, 0.05, 0.25];
+function ajustarOD(hist) {
+  const dados = hist.slice(-144);                // últimas 24 h
+  const feats = (p) => { const sat = odSat(p.Tw); return [p.rad / 1000 * Math.pow(1.036, p.Tw - 20), -Math.pow(1.07, p.Tw - 20), sat - p.OD, p.aer * (sat - p.OD)]; };
+  const n = 4, AtA = Array.from({ length: n }, () => new Array(n).fill(0)), Atb = new Array(n).fill(0);
+  let usados = 0; const res = [];
+  for (let i = 0; i + 1 < dados.length; i++) {
+    const a = dados[i], b = dados[i + 1], dh = (b.t - a.t) / H;
+    if (dh <= 0 || dh > 0.5 || !a.online || !b.online) continue;
+    const y = (b.OD - a.OD) / dh, x = feats(a);
+    for (let r = 0; r < n; r++) { Atb[r] += x[r] * y; for (let c = 0; c < n; c++) AtA[r][c] += x[r] * x[c]; }
+    usados++;
+  }
+  const lam = [3, 6, 40, 20];                     // força do prior (regularização)
+  for (let r = 0; r < n; r++) { AtA[r][r] += lam[r]; Atb[r] += lam[r] * PRIOR_OD[r]; }
+  const th = resolver(AtA, Atb) || PRIOR_OD.slice();
+  th[0] = clamp(th[0], 0.3, 6); th[1] = clamp(th[1], 0.05, 2.5); th[2] = clamp(th[2], 0, 0.3); th[3] = clamp(th[3], 0.02, 0.8);
+  // erro do ajuste (mg/L/h)
+  let se = 0, k = 0;
+  for (let i = 0; i + 1 < dados.length; i++) {
+    const a = dados[i], b = dados[i + 1], dh = (b.t - a.t) / H; if (dh <= 0 || dh > 0.5) continue;
+    const x = feats(a), yhat = x.reduce((s, xi, j) => s + xi * th[j], 0);
+    se += Math.pow((b.OD - a.OD) / dh - yhat, 2); k++;
+  }
+  return { theta: th, sigma: k ? Math.sqrt(se / k) : 0.3, amostras: usados };
+}
+// nebulosidade estimada: radiação medida / céu limpo nas horas de sol recentes
+function estimarNuvem(hist) {
+  let m = 0, c = 0;
+  for (let i = hist.length - 1; i >= 0 && i > hist.length - 145; i--) { const cs = radiacaoCeuLimpo(hist[i].t); if (cs > 250) { m += hist[i].rad; c += cs; } }
+  return c > 0 ? clamp(m / c, 0.15, 1) : 0.8;
+}
+function preverOD(hist, horas = 12, planoAerador = null) {
+  if (hist.length < 12) return null;
+  const aj = ajustarOD(hist), [P, R, k, kA] = aj.theta;
+  const nuvem = estimarNuvem(hist);
+  const ult = hist[hist.length - 1];
+  // temperatura da água prevista: ciclo diário (harmônico de 24 h ajustado nas últimas 24 h, sem tendência) somado ao valor atual
+  const ult24 = hist.slice(-144), w = 2 * Math.PI / DIA;
+  const AtA = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], Atb = [0, 0, 0, 0];
+  for (const a of ult24) { const x = [1, Math.sin(w * a.t), Math.cos(w * a.t), (a.t - ult.t) / DIA]; for (let r = 0; r < 4; r++) { Atb[r] += x[r] * a.Tw; for (let c = 0; c < 4; c++) AtA[r][c] += x[r] * x[c]; } }
+  for (let r = 0; r < 4; r++) AtA[r][r] += 1e-3;
+  const hc = ult24.length > 72 ? resolver(AtA, Atb) : null;
+  const harm = tt => hc ? hc[1] * Math.sin(w * tt) + hc[2] * Math.cos(w * tt) : 0;
+  const passo = 10 * MIN, pts = [];
+  let od = ult.OD;
+  for (let t = ult.t + passo; t <= ult.t + horas * H; t += passo) {
+    // temperatura prevista: perfil de ontem deslocado pela diferença atual (persistência)
+    const Tw = ult.Tw + harm(t) - harm(ult.t);
+    const rad = radiacaoCeuLimpo(t) * nuvem;
+    const sat = odSat(Tw);
+    const aer = planoAerador ? planoAerador(t, od) : 0;
+    const dOD = P * rad / 1000 * Math.pow(1.036, Tw - 20) - R * Math.pow(1.07, Tw - 20) + k * (sat - od) + kA * aer * (sat - od);
+    od = clamp(od + dOD * passo / H, 0, 22);
+    pts.push({ t, OD: od, Tw, aer, sd: 0.1 + aj.sigma * 0.25 * Math.sqrt((t - ult.t) / H) });
+  }
+  let min = pts[0];
+  for (const p of pts) if (p.OD < min.OD) min = p;
+  const cruza = lim => pts.find(p => p.OD < lim) || null;
+  return { pts, min, abaixo3: cruza(3), abaixo4: cruza(4), ajuste: aj, nuvem };
+}
+
+/* ---- crescimento: Yi (1998) calibrado pelas biometrias (fator α) ---- */
+function ambienteEm(hist, diario) {
+  // devolve (t) → {Tw, OD}: usa a leitura de 10 min mais próxima; antes disso, a média do dia
+  return (t) => {
+    if (hist.length && t >= hist[0].t) {
+      let lo = 0, hi = hist.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (hist[mid].t < t) lo = mid + 1; else hi = mid; }
+      return hist[lo];
+    }
+    for (let i = diario.length - 1; i >= 0; i--) if (diario[i].t <= t) return diario[i];
+    return diario[0] || { Tw: 26, OD: 6 };
+  };
+}
+function simularPeso(W0, t0, t1, amb, refeicoes, N, alfa) {
+  // integra o modelo de Yi com a temperatura e o OD medidos e a ração ofertada
+  let W = W0; const passo = 3 * H;
+  let iR = 0;
+  while (iR < refeicoes.length && refeicoes[iR].t < t0) iR++;
+  for (let t = t0; t < t1; t += passo) {
+    const a = amb(t);
+    let racaoG = 0; while (iR < refeicoes.length && refeicoes[iR].t < t + passo) { racaoG += refeicoes[iR].kg * 1000 / N; iR++; }
+    const apet = apetiteYi(W, a.Tw, Math.max(a.OD, 1.2), 0.02, alfa) * 0.5;   // refeição ≈ meio dia de apetite
+    const C = Math.min(racaoG, apet * 1.15);
+    W = Math.max(1, W + YI.b * (1 - YI.a) * alfa * E_RACAO * C - kCatab(a.Tw) * Math.pow(W, YI.n) * passo / DIA);
+  }
+  return W;
+}
+function calibrarCrescimento(biometrias, amb, refeicoes, N) {
+  // α: razão entre a eficiência real do lote e a da literatura, ajustada por mínimos quadrados
+  if (biometrias.length < 2) return { alfa: 1, rmse: null, n: biometrias.length };
+  let melhor = { alfa: 1, erro: Infinity };
+  for (let a = 0.7; a <= 1.4001; a += 0.01) {
+    let e = 0;
+    for (let i = 1; i < biometrias.length; i++) {
+      const W = simularPeso(biometrias[i - 1].W, biometrias[i - 1].t, biometrias[i].t, amb, refeicoes, N, a);
+      e += Math.pow(W - biometrias[i].W, 2);
+    }
+    if (e < melhor.erro) melhor = { alfa: +a.toFixed(2), erro: e };
+  }
+  return { alfa: melhor.alfa, rmse: Math.sqrt(melhor.erro / (biometrias.length - 1)), n: biometrias.length };
+}
+// projeção até o abate com as normais do INMET (água ≈ média do ar, Rotta et al. 2023, mais o desvio atual medido)
+function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240) {
+  const pts = [{ t: t0, W: W0 }]; let W = W0, t = t0, abate = null;
+  for (let d = 1; d <= diasMax; d++) {
+    t += DIA;
+    const Tw = NORMAIS.tmed[mesDe(t)] + desvioAgua * Math.exp(-d / 10);
+    const racao = W * pctTabela(W) / 100 * fatorTemperatura(Tw);
+    const C = Math.min(racao, apetiteYi(W, Tw, 6, 0.02, alfa));
+    W = Math.max(1, W + ganhoYi(W, Tw, C, alfa));
+    if (d % 3 === 0) pts.push({ t, W });
+    if (!abate && W >= alvo) abate = { t, W };
+    if (abate && d > (abate.t - t0) / DIA + 6) break;
+  }
+  return { pts, abate };
+}
+
+/* ---- prescrição de ração ----
+   Base: tabela de % do peso vivo. Ajustes: temperatura da água prevista, OD previsto na hora
+   de cada refeição e um teto pelo apetite estimado pelo modelo de Yi calibrado. */
+// fator de temperatura da água, SENAR (2019), Tabela 3 [senar2019]
+function fatorTemperatura(T) {
+  if (T < 16) return 0; if (T < 20) return 0.6; if (T < 25) return 0.8; if (T < 30) return 1; if (T <= 32) return 0.8; return 0;
+}
+// oxigênio: só alimentar com OD > 3 mg/L (SENAR, 2019; Rotta et al., 2023)
+function fatorOD(od) { return od > 3 ? 1 : 0; }
+function prescreverRacao({ W, N, alfa, prevOD, TwMedio, t }) {
+  const nRef = refeicoesTabela(W);
+  const base = N * W * pctTabela(W) / 100 / 1000;                // kg/dia pela tabela
+  const fT = fatorTemperatura(TwMedio);
+  const teto = apetiteYi(W, TwMedio, 6, 0.02, alfa) * N / 1000;   // saciedade pelo modelo de Yi
+  const dia0 = Math.floor(t / DIA) * DIA;
+  const candidatas = [8, 9.5, 11, 12.5, 14, 15.5, 17];
+  const odEm = (tt) => { if (!prevOD) return 6; let m = null; for (const p of prevOD.pts) if (Math.abs(p.t - tt) <= 10 * MIN) { m = p; break; } return m ? m.OD : (prevOD.pts.length ? prevOD.pts[prevOD.pts.length - 1].OD : 6); };
+  const opcoes = candidatas.map(h => { const tt = dia0 + h * H; return { h, t: tt, od: tt > t ? odEm(tt) : null }; });
+  // escolhe as horas com mais oxigênio previsto, evitando a madrugada e o início da manhã
+  const futuras = opcoes.filter(o => o.od != null);
+  const escolhidas = (futuras.length >= nRef ? futuras : opcoes).slice().sort((a, b) => (b.od ?? 6) - (a.od ?? 6)).slice(0, nRef).sort((a, b) => a.h - b.h);
+  const totalAlvo = Math.min(base * fT, teto);
+  const refeicoes = escolhidas.map(o => { const fo = o.od == null ? 1 : fatorOD(o.od); return { h: o.h, t: o.t, od: o.od, fator: fo, kg: totalAlvo / nRef * fo }; });
+  const total = refeicoes.reduce((s, r) => s + r.kg, 0);
+  let motivo;
+  const Tt = TwMedio.toFixed(1).replace('.', ',');
+  if (fT === 0) motivo = TwMedio < 16 ? `Água prevista a ${Tt} °C, abaixo de 16 °C: não alimentar (SENAR, 2019).` : `Água prevista a ${Tt} °C, acima de 32 °C: não alimentar (SENAR, 2019).`;
+  else if (totalAlvo < base * fT - 1e-6) motivo = 'Limitado pelo apetite estimado pelo modelo de crescimento (Yi, 1998).';
+  else if (fT < 1) motivo = `Água prevista a ${Tt} °C: ${Math.round(fT * 100)}% da tabela (SENAR, 2019, Tabela 3).`;
+  else motivo = `Água prevista a ${Tt} °C, na faixa de 25 a 29 °C: 100% da tabela (SENAR, 2019).`;
+  if (refeicoes.some(r => r.fator < 1)) motivo += ' Refeições com OD previsto até 3 mg/L ficam suspensas.';
+  return { nRef, base, fT, teto, alvo: totalAlvo, total, refeicoes, motivo, pct: total / (N * W / 1000) * 100 };
+}
+
+/* ---- decisão de aeração (modo automático do gêmeo) ----
+   Ligar com OD < 4 mg/L ou com OD previsto < 4 mg/L (Francis-Floyd, 2003) [francis2003];
+   manter até depois do amanhecer, quando a fotossíntese volta a produzir oxigênio (Tucker, 2005),
+   e desligar com OD ≥ 5 mg/L, o ótimo indicado por Francis-Floyd (2003). */
+function decidirAerador(estadoAtual, odAtual, prev, ultimaTroca, t) {
+  const proxMin = prev ? Math.min(...prev.pts.slice(0, 9).map(p => p.OD)) : odAtual;   // próximos 90 min
+  if (!estadoAtual && (odAtual < 4 || proxMin < 4)) return { ligar: true, motivo: odAtual < 4 ? `OD em ${odAtual.toFixed(1)} mg/L` : `OD previsto de ${proxMin.toFixed(1)} mg/L nos próximos 90 min` };
+  if (estadoAtual && odAtual >= 5 && proxMin >= 5 && radiacaoCeuLimpo(t) > 150 && t - ultimaTroca > 40 * MIN) return { ligar: false, motivo: `OD em ${odAtual.toFixed(1)} mg/L com sol` };
+  return null;
+}
+
+/* =====================================================================
+   Zonas de qualidade da água para a tilápia-do-nilo (ideal / atenção /
+   crítica / risco de morte). Usadas nos alertas, nos blocos de leitura e
+   como faixas sombreadas nos gráficos. Fontes: parametros-verificados.md, seção 8.
+   ===================================================================== */
+const ZONAS = {
+  temp: { nome: 'Temperatura da água', unid: '°C', fonte: 'Nobrega et al. (2020); Rotta et al. (2023); SENAR (2019)',
+    faixas: [
+      { de: -Infinity, ate: 11, nivel: 'morte', r: 'risco de morte', base: 'Mortalidade entre ~11 e 6 °C, conforme a linhagem (Nobrega et al., 2020)' },
+      { de: 11, ate: 20, nivel: 'critico', r: 'crítica', base: 'Abaixo de ~20 °C a alimentação pode parar; os estudos dão 13 a 20 °C (Nobrega et al., 2020)' },
+      { de: 20, ate: 26, nivel: 'atencao', r: 'atenção', base: 'Dentro do conforto (20 a 32 °C, Rotta et al., 2023), mas a 22 °C o consumo cai 40 a 50% (Nobrega et al., 2020)' },
+      { de: 26, ate: 30, nivel: 'ideal', r: 'ideal', base: 'Faixa ideal da tilápia (Nobrega et al., 2020); 27 a 30 °C em Rotta et al. (2023)' },
+      { de: 30, ate: 32, nivel: 'atencao', r: 'atenção', base: 'Ração a 80% entre 30 e 32 °C (SENAR, 2019)' },
+      { de: 32, ate: Infinity, nivel: 'critico', r: 'crítica', base: 'Acima de 32 °C, não alimentar (SENAR, 2019)' }] },
+  od: { nome: 'Oxigênio dissolvido', unid: 'mg/L', fonte: 'Tran-Duy et al. (2008); SENAR (2019); Yi (1998)',
+    faixas: [
+      { de: -Infinity, ate: 1, nivel: 'morte', r: 'risco de morte', base: 'Abaixo de 1,0 mg/L o crescimento da tilápia cai até zero em 0,3 mg/L (Yi, 1998; Dampin et al., 2012)' },
+      { de: 1, ate: 3, nivel: 'critico', r: 'crítica', base: 'Não alimentar abaixo de 3 mg/L (SENAR, 2019; Rotta et al., 2023)' },
+      { de: 3, ate: 5, nivel: 'atencao', r: 'atenção', base: 'Tilápias comeram e cresceram menos a 3,0 do que a 5,6 mg/L (Tran-Duy et al., 2008)' },
+      { de: 5, ate: Infinity, nivel: 'ideal', r: 'ideal', base: 'A 5,6 mg/L, maior consumo e crescimento (Tran-Duy et al., 2008)' }] },
+  ph: { nome: 'pH', unid: '', fonte: 'Rebouças et al. (2016); Mustapha e Atolagbe (2018); Boyd (2018b, geral)',
+    faixas: [
+      { de: -Infinity, ate: 5, nivel: 'critico', r: 'crítica', base: 'Em 14 dias, 22% de mortalidade a pH 5 e 44% a pH 4 em juvenis (Mustapha e Atolagbe, 2018)' },
+      { de: 5, ate: 5.5, nivel: 'atencao', r: 'atenção', base: 'A pH 6 por 14 dias, 12% de mortalidade em juvenis (Mustapha e Atolagbe, 2018)' },
+      { de: 5.5, ate: 9, nivel: 'ideal', r: 'ideal', base: 'Faixa adequada para a tilápia em água eutrófica (Rebouças et al., 2016)' },
+      { de: 9, ate: 11, nivel: 'atencao', r: 'atenção', base: 'A pH 9,2, o menor peso final do estudo (Rebouças et al., 2016)' },
+      { de: 11, ate: Infinity, nivel: 'critico', r: 'crítica', base: 'Sem dado da espécie; em geral os peixes morrem perto de pH 11 (Boyd, 2018b; geral)' }] },
+  nh3: { nome: 'Amônia não ionizada (NH₃-N)', unid: 'mg/L', fonte: 'El-Shafai et al. (2004); Emerson et al. (1975)',
+    faixas: [
+      { de: -Infinity, ate: 0.07, nivel: 'ideal', r: 'ideal', base: 'Sem efeito no crescimento até 0,068 mg/L (El-Shafai et al., 2004)' },
+      { de: 0.07, ate: 0.14, nivel: 'atencao', r: 'atenção', base: 'Limiar tóxico entre 0,07 e 0,14 mg/L; manter abaixo de 0,1 (El-Shafai et al., 2004)' },
+      { de: 0.14, ate: Infinity, nivel: 'critico', r: 'crítica', base: 'A 0,144 mg/L, crescimento menor e CA 1,6 vez maior (El-Shafai et al., 2004)' }] },
+};
+const faixaZona = (k, v) => v == null || !ZONAS[k] ? null : ZONAS[k].faixas.find(f => v >= f.de && v < f.ate) || null;
+const nivelZona = (k, v) => { const f = faixaZona(k, v); return f ? f.nivel : null; };
+
+/* ---- alertas ---- */
+function avaliarAlertas(L, prev, extras) {
+  const a = [];
+  const od = L.od, T = L.temperatura, ph = L.ph, uia = L.uia;
+  if (!extras.online) a.push({ id: 'offline', nivel: 'critico', titulo: 'Dispositivo offline', texto: 'Sem leituras do viveiro. O ESP32 segue com o fallback local do aerador.' });
+  const vir = (v, c) => v.toFixed(c).replace('.', ',');
+  const alerta = (id, k, v, txt, titulos) => {
+    const f = faixaZona(k, v); if (!f || f.nivel === 'ideal') return;
+    a.push({ id, nivel: f.nivel === 'atencao' ? 'atencao' : 'critico', titulo: titulos[f.nivel] + ': ' + txt, texto: f.base + '.' });
+  };
+  if (od != null) {
+    alerta('od', 'od', od, `${vir(od, 1)} mg/L`, { morte: 'OD com risco de morte', critico: 'OD crítico', atencao: 'OD abaixo do ideal' });
+    if (od < 4 && a.length && a[a.length - 1].id === 'od') a[a.length - 1].texto += ' Aerar abaixo de 4 mg/L (Francis-Floyd, 2003; geral).';
+  }
+  if (prev && prev.abaixo4 && !(od < 4)) a.push({ id: 'prev', nivel: prev.abaixo3 ? 'atencao' : 'info', titulo: `OD abaixo de 4 mg/L previsto às ${fmtHora(prev.abaixo4.t)}`, texto: `Sem aeração, o OD chegaria a ${vir(prev.min.OD, 1)} mg/L às ${fmtHora(prev.min.t)}. Aerar antes (Francis-Floyd, 2003; geral).` });
+  if (T != null) alerta('temp', 'temp', T, `${vir(T, 1)} °C`, { morte: 'Água fria com risco de morte', critico: T < 20 ? 'Água fria demais' : 'Água quente demais', atencao: T < 26 ? 'Água abaixo do ideal' : 'Água acima do ideal' });
+  if (ph != null) alerta('ph', 'ph', ph, vir(ph, 2), { critico: 'pH crítico', atencao: 'pH fora da faixa ideal' });
+  if (uia != null) alerta('nh3', 'nh3', uia, `${vir(uia, 3)} mg/L de NH₃-N`, { critico: 'Amônia tóxica alta', atencao: 'Amônia tóxica acima do ideal' });
+  if (extras.divergencia) a.push({ id: 'div', nivel: 'atencao', titulo: 'Leitura fora do esperado', texto: extras.divergencia });
+  if (extras.anomaliaAr != null && extras.anomaliaAr < -4) a.push({ id: 'frio', nivel: 'atencao', titulo: 'Frente fria', texto: `Ar ${Math.abs(extras.anomaliaAr).toFixed(1)} °C abaixo da normal de ${MESES[extras.mes]} (INMET). A água esfria e a frente fria pode misturar a coluna d'água (Araújo et al., 2017).` });
+  if (extras.falhaAerador) a.push({ id: 'aer', nivel: 'critico', titulo: 'Aerador sem efeito', texto: 'O aerador está ligado, mas o OD continua caindo. Verificar o equipamento.' });
+  return a;
+}
+
+/* =====================================================================
+   Consequências da previsão de 7 dias para o viveiro (aba Previsão)
+   dias: [{ t, tmax, tmin, chuva (mm), rad (MJ/m²), vento (m/s) }]
+   est:  { W, N, alfa, theta (parâmetros de OD do gêmeo), Tw0, OD0 }
+   ===================================================================== */
+function consequenciasSemana(dias, est) {
+  const [P, R, k, kA] = est.theta || PRIOR_OD;
+  const passo = 10 * MIN, horas = [];
+  let Tw = est.Tw0 ?? (dias[0].tmax + dias[0].tmin) / 2, od = est.OD0 ?? 6, od2 = od, aer = false, W = est.W, N = est.N;
+  const dOD = (od, Tw, rad, a) => P * rad / 1000 * Math.pow(1.036, Tw - 20) - R * Math.pow(1.07, Tw - 20) + (k + (a ? kA : 0)) * (odSat(Tw, PRESSAO_LOCAL) - od);
+  const saida = [];
+  dias.forEach((d, i) => {
+    const t0 = d.t;
+    let somaCS = 0; for (let t = t0; t < t0 + DIA; t += passo) somaCS += radiacaoCeuLimpo(t) * 600;
+    const fRad = somaCS > 0 ? clamp(d.rad * 1e6 / somaCS, 0.05, 1.15) : 1;
+    const meio = (d.tmax + d.tmin) / 2, amp = (d.tmax - d.tmin) / 2;
+    let somaTw = 0, n = 0, hAer = 0, minCom = 99, estado18 = null, twMin = 99, twMax = -99;
+    const refeicoesH = [8, 9.5, 11, 12.5, 14, 15.5, 17]; const odRef = {};
+    for (let t = t0; t < t0 + DIA; t += passo) {
+      const h = horaDe(t), Ta = meio + amp * Math.sin(2 * Math.PI * (h - 9) / 24), rad = radiacaoCeuLimpo(t) * fRad;
+      Tw += (Ta - Tw) * (passo / H) / 10;                         // água → média do ar (Rotta et al., 2023)
+      if (!aer && od < 4) aer = true; else if (aer && od >= 5 && rad > 150) aer = false;   // Francis-Floyd (2003); Tucker (2005)
+      od = clamp(od + dOD(od, Tw, rad, aer) * passo / H, 0, 22); od2 = clamp(od2 + dOD(od2, Tw, rad, false) * passo / H, 0, 22);
+      if (aer) hAer += passo / H;
+      minCom = Math.min(minCom, od); somaTw += Tw; n++; twMin = Math.min(twMin, Tw); twMax = Math.max(twMax, Tw);
+      for (const rh of refeicoesH) if (Math.abs(h - rh) < 0.09) odRef[rh] = od;
+      if (Math.abs(h - 18) < 0.09) estado18 = { t, od, Tw };
+      horas.push({ t, Ta, Tw, rad, od, odSem: od2, aer: aer ? 1 : 0 });
+    }
+    // noite seguinte sem aeração, a partir das 18 h (método de projeção noturna de Boyd et al., 1978)
+    let semAer = null;
+    if (estado18) {
+      let o = estado18.od, w = estado18.Tw, min = { od: 99, t: 0 };
+      const prox = dias[i + 1] || d, meio2 = (prox.tmax + prox.tmin) / 2, amp2 = (prox.tmax - prox.tmin) / 2;
+      for (let t = estado18.t; t < estado18.t + 15 * H; t += passo) {
+        const h = horaDe(t), dd = t >= t0 + DIA ? prox : d;
+        const Ta = (dd === d ? meio : meio2) + (dd === d ? amp : amp2) * Math.sin(2 * Math.PI * (h - 9) / 24);
+        const rad = radiacaoCeuLimpo(t) * fRad;
+        w += (Ta - w) * (passo / H) / 10; o = clamp(o + dOD(o, w, rad, false) * passo / H, 0, 22);
+        if (o < min.od) min = { od: o, t };
+      }
+      semAer = min;
+    }
+    const TwMed = somaTw / n, fT = fatorTemperatura(TwMed);
+    const base = N * W * pctTabela(W) / 100 / 1000;
+    const sac = apetiteYi(W, TwMed, 6, 0.02, est.alfa) * N / 1000;
+    const nRef = refeicoesTabela(W);
+    const melhores = Object.entries(odRef).sort((a, b) => b[1] - a[1]).slice(0, nRef);
+    const suspensas = melhores.filter(([, o]) => o <= 3).length;
+    const racao = Math.min(base * fT, sac) * (1 - suspensas / nRef);
+    const ganho = racao > 0 ? ganhoYi(W, TwMed, racao * 1000 / N, est.alfa) : -kCatab(TwMed) * Math.pow(W, YI.n);
+    const flags = [];
+    const zT = faixaZona('temp', TwMed);
+    if (zT.nivel === 'morte') flags.push({ nivel: 'critico', txt: `Água a ${fmtNum(TwMed, 1)} °C: risco de morte por frio.`, refs: ['nobrega2020'] });
+    else if (TwMed < 20) flags.push({ nivel: 'critico', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo do conforto da tilápia: a alimentação pode parar; ração a ${Math.round(fT * 100)}% da tabela.`, refs: ['nobrega2020', 'rotta2023', 'senar2019'] });
+    else if (TwMed < 26) flags.push({ nivel: 'atencao', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo da faixa ideal (26 a 30 °C): menos apetite e crescimento; ${fT >= 1 ? 'a tabela ainda manda ração cheia (25 a 29 °C)' : `ração a ${Math.round(fT * 100)}% da tabela`}.`, refs: ['nobrega2020', 'senar2019'] });
+    else if (TwMed > 32) flags.push({ nivel: 'critico', txt: 'Água acima de 32 °C: não alimentar e vigiar o OD.', refs: ['senar2019', 'boyd2018a'] });
+    else if (TwMed >= 30) flags.push({ nivel: 'atencao', txt: 'Água acima da faixa ideal: menos oxigênio dissolvido e mais consumo; ração a 80%, antes do pico de calor.', refs: ['senar2019', 'nobrega2020', 'boyd2018a'] });
+    if (semAer && semAer.od < 4) {
+      const zo = faixaZona('od', semAer.od).nivel;
+      flags.push({ nivel: zo === 'atencao' ? 'atencao' : 'critico', txt: `Sem aeração, o OD chegaria a ${fmtNum(semAer.od, 1)} mg/L às ${fmtHora(semAer.t)}${zo === 'morte' ? ', com risco de morte' : zo === 'critico' ? ', na zona crítica' : ''}: programar aeração noturna.`, refs: zo === 'morte' ? ['yi1998', 'francis2003', 'boyd1978'] : zo === 'critico' ? ['senar2019', 'francis2003', 'boyd1978'] : ['trandy2008', 'francis2003', 'boyd1978'] });
+    }
+    if (fRad < 0.5) flags.push({ nivel: 'atencao', txt: `Dia nublado (${Math.round(fRad * 100)}% da radiação de céu limpo): menos fotossíntese e OD mais baixo na noite seguinte.`, refs: ['romaire1979', 'tucker2005', 'boyd2018a'] });
+    const ant = dias[i - 1];
+    if (ant && (ant.tmax - d.tmax >= 5 || (d.chuva >= 20 && ant.tmax - d.tmax >= 3) || d.vento >= 8)) flags.push({ nivel: 'atencao', txt: 'Frente fria, chuva fria ou vento forte: a água se mistura e o OD e o pH podem cair. Deixar o aerador de prontidão.', refs: ['araujo2017', 'francis2003'], limiar: true });
+    if (d.tmax >= 32 && d.vento < 3) flags.push({ nivel: 'info', txt: 'Dia quente e sem vento: a água tende a estratificar; uma frente fria depois pode misturá-la de uma vez.', refs: ['araujo2017'], limiar: true });
+    saida.push({ ...d, fRad, TwMed, twMin, twMax, fT, base, racao, sac, suspensas, nRef, semAer, minCom, hAer, ganho, W, flags });
+    W = Math.max(1, W + ganho);
+  });
+  return { dias: saida, horas };
+}
+const fmtNum = (x, d) => x.toFixed(d).replace('.', ',');
+
+if (false) module.exports = { ZONAS, faixaZona, nivelZona, consequenciasSemana, ambienteEm, simularPeso, Simulador, CENARIOS, preverOD, ajustarOD, calibrarCrescimento, projetarCrescimento, prescreverRacao, decidirAerador, avaliarAlertas, apetiteYi, ganhoYi, tau, odSat, fracNH3, pctTabela, fatorTemperatura, NORMAIS, fmtHora, fmtData, horaDe, DIA, H, MIN };
+
+/* =====================================================================
+   Parte 2: o gêmeo digital em execução (o que o servidor faria).
+   Recebe as mensagens do viveiro, guarda o histórico, roda os modelos
+   e devolve comandos (aerador e ração) pelo mesmo contrato de tópicos.
+   ===================================================================== */
+class Gemeo {
+  constructor(enviar) {
+    this.enviar = enviar;           // enviar(topico, valor): publica um comando para o ESP32
+    this.hist = []; this.diario = []; this.biometrias = []; this.refeicoes = [];
+    this.L = {}; this.t = null; this.online = false; this.ultimaMsgReal = 0;
+    this.modoAeracao = 'AUTO'; this.aerador = false; this.origemAerador = '';
+    this.ultimaTroca = -Infinity;
+    this.prev = null; this.prevAnterior = null; this.calib = { alfa: 1, rmse: null, n: 0 };
+    this.plano = null; this.refeicoesFeitas = new Set();
+    this.alertas = []; this.logAlertas = []; this.acoes = [];
+    this.divergencia = null; this.divergenciaAte = 0;
+    this.N = 4000; this.cenario = '';
+  }
+  sincronizar(m) {
+    this.hist = m.historico.slice(); this.diario = (m.diario || []).slice(); this.biometrias = m.biometrias.slice(); this.refeicoes = m.refeicoes.slice();
+    this.t = m.t; this.cenario = m.cenario; this.N = m.N;
+    this.plano = null; this.refeicoesFeitas = new Set(); this.prev = null; this.prevAnterior = null;
+    this.logAlertas = []; this.acoes = []; this.alertas = [];
+    this.recalibrar();
+  }
+  receber(m) {
+    this.ultimaMsgReal = Date.now();
+    this.t = m.t; this.L = m.leituras; this.N = m.leituras['biomassa/quantidade'];
+    this.online = m.leituras.status === 'ONLINE';
+    this.aerador = m.leituras['atuador/aerador'] === 'LIGADO';
+    this.origemAerador = m.leituras['atuador/aerador_origem'];
+    for (const a of m.amostras || []) { this.verificarDivergencia(a); this.hist.push(a); }
+    const lim = this.t - 3 * DIA; while (this.hist.length && this.hist[0].t < lim) this.hist.shift();
+    for (const r of m.refeicoes || []) if (r.origem === 'tabela') this.refeicoes.push(r);
+    for (const d of m.diario || []) this.diario.push(d);
+    if (m.biometrias && m.biometrias.length) { this.biometrias.push(...m.biometrias); this.recalibrar(); this.plano = null; }
+    if ((m.amostras || []).length) this.ciclo();
+  }
+  // compara a leitura com o que o modelo previu 10 min antes: salto grande sugere sensor ou evento
+  verificarDivergencia(a) {
+    const p = this.prev && this.prev.pts.find(x => Math.abs(x.t - a.t) < 5 * MIN);
+    if (p && a.online) {
+      const lim = Math.max(1.2, 5 * p.sd);
+      if (Math.abs(a.OD - p.OD) > lim) { this.divergencia = `OD medido ${a.OD.toFixed(1)} mg/L, esperado ${p.OD.toFixed(1)} mg/L pelo modelo. Pode ser sensor descalibrado ou um evento no viveiro.`; this.divergenciaAte = a.t + 2 * H; this.registrarAcao(a.t, 'Leitura de OD fora do esperado pelo modelo'); }
+    }
+    if (a.t > this.divergenciaAte) this.divergencia = null;
+  }
+  recalibrar() {
+    const bs = this.biometrias.slice(-6);
+    // usa as biometrias mais recentes; o histórico de 10 min cobre só 3 dias, então completa com temperatura média
+    this.calib = calibrarCrescimento(bs, ambienteEm(this.hist, this.diario), this.refeicoes, this.N);
+  }
+  get atual() {
+    const L = this.L;
+    const T = L['agua/temperatura'], ph = L['agua/ph'], tan = L['agua/amonia_total'];
+    return { od: L['agua/od'], temperatura: T, ph, tan, uia: T != null ? tan * fracNH3(T, ph) : null };
+  }
+  pesoEstimado() {
+    const b = this.biometrias[this.biometrias.length - 1];
+    if (!b) return 110;
+    return simularPeso(b.W, b.t, this.t, ambienteEm(this.hist, this.diario), this.refeicoes, this.N, this.calib.alfa);
+  }
+  ciclo() {
+    if (!this.hist.length) return;
+    const t = this.t, ult = this.hist[this.hist.length - 1];
+    this.prevAnterior = this.prev;
+    this.prev = preverOD(this.hist, 12);
+    // plano de ração do dia: feito às 06:00 ou quando ainda não existe para o dia
+    // plano de ração do dia: refeito a cada hora com a previsão mais nova (refeições já feitas ficam)
+    const dia = Math.floor(t / DIA), hora = Math.floor(t / H);
+    if (!this.plano || this.plano.dia !== dia || this.plano.hora !== hora) this.montarPlano();
+    // refeições: no horário, recalcula a quantidade com o OD atual e envia o comando
+    if (this.plano && this.online) for (const r of this.plano.refeicoes) {
+      const chave = dia + ':' + r.h;
+      if (t >= r.t && t < r.t + 45 * MIN && !this.refeicoesFeitas.has(chave)) {
+        this.refeicoesFeitas.add(chave);
+        const fo = fatorOD(this.atual.od);
+        const kg = +(this.plano.alvo / this.plano.nRef * fo).toFixed(2);
+        r.executado = kg; r.odReal = this.atual.od;
+        if (kg > 0) { this.enviar('comando/racao', kg.toFixed(2)); this.refeicoes.push({ t, kg, origem: 'gemeo' }); }
+        this.registrarAcao(t, kg > 0 ? `Refeição das ${fmtHora(r.t)}: ${kg.toFixed(1)} kg liberados` : `Refeição das ${fmtHora(r.t)} suspensa: OD em ${this.atual.od.toFixed(1)} mg/L`);
+      }
+    }
+    // aeração automática
+    if (this.modoAeracao === 'AUTO' && this.online) {
+      const d = decidirAerador(this.aerador && this.origemAerador === 'GEMEO' ? true : this.aerador, this.atual.od, this.prev, this.ultimaTroca, t);
+      if (d) { this.comandarAerador(d.ligar, d.motivo); }
+      else if (this.origemAerador !== 'GEMEO' && this.t - this.ultimaTroca > 30 * MIN) {
+        // retoma o controle depois de um fallback local, mantendo o estado atual
+        this.enviar('comando/aerador', this.aerador ? 'LIGAR' : 'DESLIGAR'); this.ultimaTroca = t;
+      }
+    }
+    // detecção de aerador com falha: ligado há 1 h e o OD continua caindo abaixo de 5
+    const ultimaHora = this.hist.slice(-7);
+    this.falhaAerador = ultimaHora.length === 7 && ultimaHora.every(a => a.aer) && ultimaHora[6].OD < ultimaHora[0].OD - 0.25 && ultimaHora[6].OD < 5;
+    // anomalia do ar nas últimas 24 h em relação à normal do mês
+    const dia24 = this.hist.slice(-144);
+    const mediaAr = dia24.reduce((s, a) => s + a.Ta, 0) / Math.max(1, dia24.length);
+    this.anomaliaAr = dia24.length > 100 ? mediaAr - NORMAIS.tmed[mesDe(t)] : null;
+    this.atualizarAlertas();
+  }
+  montarPlano() {
+    const W = this.pesoEstimado();
+    const TwMedio = this.prev ? this.prev.pts.reduce((s, p) => s + p.Tw, 0) / this.prev.pts.length : (this.atual.temperatura ?? 26);
+    const p = prescreverRacao({ W, N: this.N, alfa: this.calib.alfa, prevOD: this.prev, TwMedio, t: this.t });
+    p.dia = Math.floor(this.t / DIA); p.hora = Math.floor(this.t / H); p.W = W; p.TwMedio = TwMedio;
+    // mantém as refeições que já passaram: o que foi executado não muda
+    const antigo = this.plano && this.plano.dia === p.dia ? this.plano : null;
+    if (antigo) {
+      const feitas = antigo.refeicoes.filter(r => r.executado != null || r.t <= this.t);
+      const futuras = p.refeicoes.filter(r => r.t > this.t && !feitas.some(f => f.h === r.h)).slice(0, Math.max(0, p.nRef - feitas.length));
+      p.refeicoes = [...feitas, ...futuras].sort((a, b) => a.h - b.h);
+      p.total = p.refeicoes.reduce((s, r) => s + (r.executado ?? r.kg), 0);
+      p.pct = p.total / (this.N * W / 1000) * 100;
+    }
+    this.plano = p;
+  }
+  comandarAerador(ligar, motivo, manual = false) {
+    this.enviar('comando/aerador', ligar ? 'LIGAR' : 'DESLIGAR');
+    this.aerador = ligar; this.origemAerador = 'GEMEO'; this.ultimaTroca = this.t;
+    this.registrarAcao(this.t, `${manual ? 'Comando do operador' : 'Gêmeo'}: aerador ${ligar ? 'ligado' : 'desligado'}${motivo ? ' (' + motivo + ')' : ''}`);
+  }
+  registrarAcao(t, txt) { this.acoes.unshift({ t, txt }); if (this.acoes.length > 40) this.acoes.pop(); }
+  atualizarAlertas() {
+    const novos = avaliarAlertas(this.atual, this.prev, { online: this.online, divergencia: this.divergencia, anomaliaAr: this.anomaliaAr, mes: mesDe(this.t), falhaAerador: this.falhaAerador });
+    const antes = new Map(this.alertas.map(a => [a.id, a]));
+    for (const a of novos) { const o = antes.get(a.id); if (!o || o.nivel !== a.nivel) this.logAlertas.unshift({ t: this.t, ...a }); }
+    if (this.logAlertas.length > 50) this.logAlertas.length = 50;
+    this.alertas = novos;
+  }
+  // aeração prevista: quando o gêmeo planeja ligar nas próximas 12 h
+  janelaAeracao() {
+    if (!this.prev) return null;
+    const p = this.prev.pts.find(x => x.OD < 4);
+    return p ? { t: p.t, od: p.OD } : null;
+  }
+}
+if (false) module.exports.Gemeo = Gemeo;
+
+/* =====================================================================
+   Fontes do projeto: referências e a origem de cada valor usado.
+   Status: 'especie' = literatura sobre a tilápia-do-nilo;
+           'geral'   = literatura sobre peixes de água quente ou viveiros em geral;
+           'derivado'= calculado a partir de valores com fonte;
+           'sem'     = escolha ou calibração do protótipo, sem fonte.
+   ===================================================================== */
+const REFS = {
+  senar2019: { c: 'SENAR (2019)', t: 'SENAR. Piscicultura: alimentação. Coleção SENAR 263. Brasília: SENAR, 2019.', esp: true },
+  nobrega2020: { c: 'Nobrega et al. (2020)', t: 'NOBREGA, R. O. et al. Improving winter production of Nile tilapia: what can be done? Aquaculture Reports, v. 18, 100453, 2020.', doi: '10.1016/j.aqrep.2020.100453', esp: true },
+  rotta2023: { c: 'Rotta et al. (2023)', t: 'ROTTA, M. A. et al. Manejo de inverno para a piscicultura no Sul do Brasil. Porto Alegre: SEAPI/DDPA, 2023.', esp: true },
+  trandy2008: { c: 'Tran-Duy et al. (2008)', t: 'TRAN-DUY, A.; SCHRAMA, J. W.; VAN DAM, A. A.; VERRETH, J. A. J. Effects of oxygen concentration and body weight on maximum feed intake, growth and hematological parameters of Nile tilapia, Oreochromis niloticus. Aquaculture, v. 275, n. 1–4, p. 152–162, 2008.', doi: '10.1016/j.aquaculture.2007.12.024', esp: true },
+  reboucas2016: { c: 'Rebouças et al. (2016)', t: 'REBOUÇAS, V. T. et al. Reassessment of the suitable range of water pH for culture of Nile tilapia Oreochromis niloticus L. in eutrophic water. Acta Scientiarum. Animal Sciences, v. 38, n. 4, p. 361–368, 2016.', doi: '10.4025/actascianimsci.v38i4.32051', esp: true },
+  mustapha2018: { c: 'Mustapha e Atolagbe (2018)', t: 'MUSTAPHA, M. K.; ATOLAGBE, S. D. Tolerance level of different life stages of Nile tilapia Oreochromis niloticus (Linnaeus, 1758) to low pH and acidified waters. The Journal of Basic and Applied Zoology, v. 79, 46, 2018.', doi: '10.1186/s41936-018-0061-3', esp: true },
+  elshafai2004: { c: 'El-Shafai et al. (2004)', t: 'EL-SHAFAI, S. A. et al. Chronic ammonia toxicity to duckweed-fed tilapia (Oreochromis niloticus). Aquaculture, v. 232, n. 1–4, p. 117–127, 2004.', esp: true },
+  kubitza2026: { c: 'Kubitza (2026)', t: 'KUBITZA, F. Water quality impacts on health and performance of fish and shrimp, Part 3: the nitrogenous compounds ammonia, nitrite and nitrate. Responsible Seafood Advocate, Global Seafood Alliance, 2026.', esp: true },
+  yi1998: { c: 'Yi (1998)', t: 'YI, Y. A bioenergetics growth model for Nile tilapia (Oreochromis niloticus) based on limiting nutrients and fish standing crop in fertilized ponds. Aquacultural Engineering, v. 18, n. 3, p. 157–173, 1998.', doi: '10.1016/S0144-8609(98)00028-4', esp: true },
+  dampin2012: { c: 'Dampin et al. (2012)', t: 'DAMPIN, N. et al. Fish growth model for Nile tilapia (Oreochromis niloticus) in wastewater oxidation pond, Thailand. Procedia Environmental Sciences, v. 13, p. 513–524, 2012.', doi: '10.1016/j.proenv.2012.01.042', esp: true },
+  kimjo1999: { c: 'Kim e Jo (1999)', t: 'KIM, I.-B.; JO, J.-Y. Oxygen consumption in Nile tilapia, Oreochromis niloticus, in relation to body weight and water temperature. Journal of Aquaculture (Coreia), v. 12, n. 3, p. 247–254, 1999.', esp: true },
+  francis2003: { c: 'Francis-Floyd (2003)', t: 'FRANCIS-FLOYD, R. Dissolved oxygen for fish production. FA27. University of Florida, IFAS Extension, 2003.', esp: false },
+  boyd2018a: { c: 'Boyd (2018a)', t: 'BOYD, C. E. Dissolved oxygen dynamics. Responsible Seafood Advocate, Global Seafood Alliance, 20 ago. 2018.', esp: false },
+  boyd2018b: { c: 'Boyd (2018b)', t: 'BOYD, C. E. Constantly changing pH unavoidable, completely normal. Responsible Seafood Advocate, Global Seafood Alliance, 23 jul. 2018.', esp: false },
+  tucker2005: { c: 'Tucker (2005)', t: 'TUCKER, C. Pond aeration. SRAC Publication 3700. Southern Regional Aquaculture Center, 2005.', esp: false },
+  boyd1978: { c: 'Boyd et al. (1978)', t: 'BOYD, C. E.; ROMAIRE, R. P.; JOHNSTON, E. Predicting early morning dissolved oxygen concentrations in channel catfish ponds. Transactions of the American Fisheries Society, v. 107, n. 3, p. 484–492, 1978.', doi: '10.1577/1548-8659(1978)107<484:PEMDOC>2.0.CO;2', esp: false },
+  romaire1979: { c: 'Romaire e Boyd (1979)', t: 'ROMAIRE, R. P.; BOYD, C. E. Effects of solar radiation on the dynamics of dissolved oxygen in channel catfish ponds. Transactions of the American Fisheries Society, v. 108, n. 5, p. 473–478, 1979.', esp: false },
+  araujo2017: { c: 'Araújo et al. (2017)', t: 'ARAÚJO, C. A. S. et al. Effects of atmospheric cold fronts on stratification and water quality of a tropical reservoir: implications for aquaculture. Aquaculture Environment Interactions, v. 9, p. 385–403, 2017.', doi: '10.3354/aei00240', esp: false },
+  benson1984: { c: 'Benson e Krause (1984)', t: 'BENSON, B. B.; KRAUSE, D. The concentration and isotopic fractionation of oxygen dissolved in freshwater and seawater in equilibrium with the atmosphere. Limnology and Oceanography, v. 29, n. 3, p. 620–632, 1984.', doi: '10.4319/lo.1984.29.3.0620', esp: false },
+  emerson1975: { c: 'Emerson et al. (1975)', t: 'EMERSON, K. et al. Aqueous ammonia equilibrium calculations: effect of pH and temperature. Journal of the Fisheries Research Board of Canada, v. 32, p. 2379–2383, 1975.', doi: '10.1139/f75-274', esp: false },
+  inmet: { c: 'INMET (normais 1991–2020)', t: 'INMET. Normais climatológicas do Brasil 1991–2020 e balanços mensais da estação de Goiânia (GO). Instituto Nacional de Meteorologia.', url: 'https://portal.inmet.gov.br', esp: false },
+  openmeteo: { c: 'Open-Meteo', t: 'OPEN-METEO. Weather Forecast API. Previsão diária para Goiânia (−16,68; −49,25).', url: 'https://open-meteo.com/en/docs', esp: false },
+};
+const citar = ks => ks.map(k => REFS[k] ? REFS[k].c : k).join('; ');
+
+const ITENS_FONTES = [
+  ['Faixas de temperatura da água (ideal 26 a 30 °C; crítica abaixo de 20 e acima de 32; risco de morte até 11)', 'zonas nos gráficos e alertas', ['nobrega2020', 'rotta2023', 'senar2019'], 'especie'],
+  ['Faixas de oxigênio dissolvido (ideal 5 ou mais; atenção 3 a 5; crítica 1 a 3; risco de morte abaixo de 1)', 'zonas nos gráficos e alertas', ['trandy2008', 'senar2019', 'yi1998', 'dampin2012'], 'especie'],
+  ['Faixas de pH (ideal 5,5 a 9,0; crítica abaixo de 5)', 'zonas nos gráficos e alertas', ['reboucas2016', 'mustapha2018'], 'especie'],
+  ['Limite alcalino de pH (crítico a partir de 11)', 'sem dado da espécie', ['boyd2018b'], 'geral'],
+  ['Faixas de amônia não ionizada (ideal abaixo de 0,07; crítica a partir de 0,14 mg/L de NH₃-N)', 'zonas nos gráficos e alertas', ['elshafai2004'], 'especie'],
+  ['NH₃ até 0,05 mg/L para a tilápia (≈ 0,04 de NH₃-N, dentro da zona ideal)', 'apoio', ['kubitza2026'], 'especie'],
+  ['Fração de amônia não ionizada pela temperatura e pelo pH', 'fórmula', ['emerson1975'], 'geral'],
+  ['Ração por faixa de peso, refeições por dia e conversão esperada', 'SENAR, Tabela 1', ['senar2019'], 'especie'],
+  ['Fator de temperatura da ração (0, 60, 80, 100, 80 e 0%)', 'SENAR, Tabela 3', ['senar2019'], 'especie'],
+  ['Só alimentar com OD acima de 3 mg/L', 'regra de ração', ['senar2019', 'rotta2023'], 'especie'],
+  ['Aerar com OD medido ou previsto abaixo de 4 mg/L', 'regra do gêmeo', ['francis2003'], 'geral'],
+  ['Desligar o aerador com OD de 5 mg/L ou mais e sol', 'regra do gêmeo', ['tucker2005', 'francis2003'], 'geral'],
+  ['Fallback do ESP32: liga abaixo de 3 mg/L', 'regra local', ['boyd2018a'], 'geral'],
+  ['Segurança do ESP32 em 2,5 mg/L e desligar o fallback em 5 mg/L', 'escolha do protótipo', [], 'sem'],
+  ['Modelo de crescimento bioenergético e seus parâmetros (Tmin 15, Topt 33, Tmax 41 °C; DOcrit 1,0; UIAcrit 0,06; kmin 0,00133 etc.)', 'Yi, com a tabela de Dampin', ['yi1998', 'dampin2012'], 'especie'],
+  ['Eficiência do alimento no modelo (E ≈ 2,70)', 'resolvida para dar CA 1,3 a 200 g e 26,5 °C', ['senar2019', 'yi1998'], 'derivado'],
+  ['Fator de calibração α pelas biometrias', 'mínimos quadrados, limitado a 0,7–1,4', ['dampin2012'], 'derivado'],
+  ['Consumo de oxigênio dos peixes por peso e temperatura', 'tabela interpolada', ['kimjo1999'], 'especie'],
+  ['Estrutura do balanço de oxigênio (fotossíntese, respiração, troca com o ar, aerador) e projeção noturna', 'modelo do viveiro e da previsão', ['boyd1978', 'romaire1979'], 'geral'],
+  ['Saturação de oxigênio pela temperatura e pela pressão', 'fórmula', ['benson1984'], 'geral'],
+  ['Pressão local de 926 hPa (749 m de altitude)', 'atmosfera padrão', [], 'derivado'],
+  ['Eficiência do aerador (3,0 kg O₂/kWh) e potência de 0,75 kW (1 cv)', 'kLa ≈ 0,21 por hora', ['tucker2005'], 'derivado'],
+  ['Clima mensal de Goiânia (máxima, mínima, média, chuva)', 'normais; meses sem boletim derivados da média', ['inmet'], 'geral'],
+  ['Temperatura média diária da água ≈ média do ar', 'aquecimento da água', ['rotta2023'], 'especie'],
+  ['Previsão do tempo real de 7 dias', 'máxima, mínima, chuva, radiação e vento', ['openmeteo'], 'geral'],
+  ['Frente fria mistura a água e baixa OD e pH', 'consequência na aba Previsão', ['araujo2017'], 'geral'],
+  ['Dia nublado reduz o OD da noite seguinte', 'consequência na aba Previsão', ['romaire1979', 'tucker2005', 'boyd2018a'], 'geral'],
+  ['Limiares de frente fria (queda de 5 °C na máxima, 20 mm de chuva, vento de 8 m/s) e de estratificação (32 °C e vento abaixo de 3 m/s)', 'limiar do protótipo', [], 'sem'],
+  ['Coeficientes do viveiro simulado (fotossíntese 2,3; respiração da água 0,22 mg/L/h; θ 1,036 e 1,07; troca com o ar 0,03 + 0,015·vento)', 'calibração do simulador', [], 'sem'],
+  ['Constante de tempo da água (≈ 10 h), umidade relativa e chance de chuva por mês', 'calibração do simulador', [], 'sem'],
+  ['pH e amônia total do viveiro simulado (pH ≈ 7,4 + 0,9·log₂ da saturação de OD)', 'calibração do simulador', [], 'sem'],
+  ['Taxas de mortalidade do simulador (os limiares de OD 1,0 mg/L e 11 °C têm fonte)', 'calibração do simulador', ['yi1998', 'nobrega2020'], 'sem'],
+  ['Lote de 4.000 peixes em 1.000 m², peso de abate de 800 g, biometria semanal', 'cenário da apresentação', [], 'sem'],
+  ['Manejo tradicional de comparação (aerador das 23 h às 6 h, ração às 8 h e às 16 h)', 'cenário da apresentação', [], 'sem'],
+];
+const STATUS_FONTE = { especie: ['ok', 'Tilápia'], geral: ['info', 'Geral'], derivado: ['warn', 'Derivado'], sem: ['crit', 'Sem fonte'] };
+
+/* =====================================================================
+   Parte 3: interface. Duas abas do mesmo site:
+   - Painel (o gêmeo digital): leituras, previsões, prescrição, comandos
+   - Simulador (a contraparte física): onde o apresentador mexe nos valores
+   As abas conversam por BroadcastChannel (com reserva em localStorage),
+   no papel que o broker MQTT faria na arquitetura real.
+   ===================================================================== */
+const $ = (sel, raiz = document) => raiz.querySelector(sel);
+const fmt = (x, d = 1) => x == null || Number.isNaN(x) ? '--' : Number(x).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cor = nome => getComputedStyle(document.documentElement).getPropertyValue('--' + nome).trim();
+
+/* ---------------- barramento entre abas (no lugar do broker MQTT) ---------------- */
+// Canal das abas por MQTT. Duas formas:
+//  - servidor local (servidor.py): broker na própria máquina, tópicos gemeo/viveiro1/...
+//  - broker na internet (padrão: broker público da HiveMQ): tópicos gemeo/viveiro1/<sala>/..., com um código de sala aleatório
+const BROKER_PADRAO = 'wss://broker.hivemq.com:8884/mqtt';
+function carregarScript(src) { return new Promise((ok, erro) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = erro; document.head.appendChild(s); }); }
+const codificar = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/=+$/, '');
+const decodificar = t => JSON.parse(decodeURIComponent(escape(atob(t))));
+const novaSala = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
+class Barramento {
+  constructor() {
+    this.id = Math.random().toString(36).slice(2); this.vistos = new Set(); this.ouvintes = [];
+    this.mqtt = null; this.mqttOk = false; this.info = null; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO;
+    this.fila = []; this.aoMudarRede = () => {}; this.ultEspelho = 0;
+    try { this.bc = new BroadcastChannel('gemeo-viveiro1'); this.bc.onmessage = e => this.chegou(e.data); } catch (e) { this.bc = null; }
+    window.addEventListener('storage', e => { if (e.key === 'gemeo-viveiro1' && e.newValue) { try { this.chegou(JSON.parse(e.newValue)); } catch (_) {} } });
+    this.pronto = this.iniciarMqtt().catch(() => {}).then(() => { const f = this.fila; this.fila = null; if (this.mqttOk) for (const m of f) this.publicar(m); });
+  }
+  get topicoAbas() { return this.prefixo + '_abas'; }
+  static configSalva() { try { return JSON.parse(localStorage.getItem('gemeo-mqtt')); } catch (_) { return null; } }
+  async iniciarMqtt() {
+    if (window.GEMEO_SERVIDOR && /^https?:$/.test(location.protocol)) {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 1500);
+      let info; try { const r = await fetch('/api/info', { cache: 'no-store', signal: ctl.signal }); if (!r.ok) return; info = await r.json(); } catch (_) { return; } finally { clearTimeout(to); }
+      if (!info || !info.gemeo) return;
+      this.info = info; this.modoRede = 'local';
+      return this.conectar((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/mqtt', {}, TOPICO);
+    }
+    // configuração vinda do QR code (#mqtt=...) ou guardada neste navegador
+    let cfg = null;
+    const m = location.hash.match(/[#&]mqtt=([A-Za-z0-9+/_-]+)/);
+    if (m) { try { cfg = decodificar(m[1]); localStorage.setItem('gemeo-mqtt', JSON.stringify(cfg)); } catch (_) {} history.replaceState(null, '', location.pathname + location.search); }
+    if (!cfg) cfg = Barramento.configSalva();
+    if (cfg && cfg.sala) return this.usarNuvem(cfg);
+  }
+  async usarNuvem(cfg) {
+    this.cfg = cfg; this.modoRede = 'nuvem';
+    try { localStorage.setItem('gemeo-mqtt', JSON.stringify(cfg)); } catch (_) {}
+    return this.conectar(cfg.url || BROKER_PADRAO, cfg.usuario ? { username: cfg.usuario, password: cfg.senha || '' } : {}, TOPICO + cfg.sala + '/');
+  }
+  desligarNuvem() {
+    try { localStorage.removeItem('gemeo-mqtt'); } catch (_) {}
+    if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
+    this.mqtt = null; this.mqttOk = false; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO; this.aoMudarRede();
+  }
+  async conectar(url, extra, prefixo) {
+    if (!window.mqtt) await carregarScript('mqtt.min.js');
+    if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
+    this.prefixo = prefixo; this.mqttOk = false; this.erroRede = null;
+    await new Promise(ok => {
+      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 2000, keepalive: 30, connectTimeout: 6000, ...extra });
+      this.mqtt = c; const fim = setTimeout(ok, 6000);
+      c.on('connect', () => { this.mqttOk = true; this.erroRede = null; c.subscribe(this.topicoAbas); clearTimeout(fim); ok(); this.aoMudarRede(); });
+      c.on('error', e => { this.erroRede = e && e.message; this.aoMudarRede(); });
+      c.on('close', () => { if (this.mqttOk) { this.mqttOk = false; this.aoMudarRede(); } });
+      c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
+    });
+  }
+  descricaoRede() { return !this.modoRede ? '' : this.modoRede === 'local' ? 'MQTT local' : `MQTT · sala ${this.cfg.sala}`; }
+  linkCelular() {
+    const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+    if (this.modoRede === 'local') return `http://${this.info.ips[0]}:${this.info.porta}/simulador.html`;
+    return this.cfg ? base + 'simulador.html#mqtt=' + codificar(this.cfg) : '';
+  }
+  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m)); } catch (_) {} }
+  // espelha as leituras nos tópicos do contrato (…/agua/od etc.), para ver num cliente MQTT
+  espelhar(leituras, t) {
+    if (!this.mqttOk || !leituras || Date.now() - this.ultEspelho < 1000) return; this.ultEspelho = Date.now();
+    for (const [k, v] of Object.entries(leituras)) this.mqtt.publish(this.prefixo + k, String(v), { retain: this.modoRede === 'local' });
+    this.mqtt.publish(this.prefixo + 'simulacao/tempo', fmtData(t) + ' ' + fmtHora(t));
+  }
+  comandoContrato(topico, valor) { if (this.mqttOk && topico !== 'servidor/status') this.mqtt.publish(this.prefixo + topico, String(valor)); }
+  on(fn) { this.ouvintes.push(fn); }
+  enviar(m) {
+    m.de = this.id; m.mid = this.id + ':' + Math.random().toString(36).slice(2);
+    if (this.bc) { try { this.bc.postMessage(m); } catch (_) {} }
+    try { localStorage.setItem('gemeo-viveiro1', JSON.stringify(m)); } catch (_) {}
+    if (this.fila) this.fila.push(m); else if (this.mqttOk) this.publicar(m);
+  }
+  chegou(m) {
+    if (!m || m.de === this.id || this.vistos.has(m.mid)) return;
+    this.vistos.add(m.mid); if (this.vistos.size > 400) this.vistos = new Set([...this.vistos].slice(-200));
+    for (const f of this.ouvintes) f(m);
+  }
+}
+
+/* ---------------- motor: roda o simulador e monta as mensagens do ESP32 ---------------- */
+const VELOCIDADES = [[1 / 60, 'Tempo real'], [1, '1 min/s'], [5, '5 min/s'], [15, '15 min/s'], [60, '1 h/s']];
+class Motor {
+  constructor(sim, vel = 5) { this.sim = sim; this.vel = vel; this.pausado = false; this.logMsgs = []; this.marcarEnviado(); }
+  marcarEnviado() { const s = this.sim; this.ult = { t: s.t, bio: s.biometrias.length ? s.biometrias[s.biometrias.length - 1].t : 0, ref: s.t, dia: s.diario.length ? s.diario[s.diario.length - 1].t : 0 }; }
+  avancar(segReais) { if (!this.pausado) this.sim.avancar(this.vel * segReais); }
+  sync() {
+    const s = this.sim; this.marcarEnviado();
+    return { tipo: 'sync', t: s.t, cenario: s.cenario, N: Math.round(s.v.N), historico: s.historico, diario: s.diario, biometrias: s.biometrias, refeicoes: s.refeicoes.filter(r => r.origem === 'tabela'), vel: this.vel, pausado: this.pausado };
+  }
+  mensagem() {
+    const s = this.sim, base = { tipo: 'tick', t: s.t, vel: this.vel, pausado: this.pausado, cenario: s.cenario };
+    if (!s.ctl.internet) return { ...base, offline: true };
+    const u = this.ult;
+    const m = { ...base, leituras: s.leituras(),
+      amostras: s.historico.filter(a => a.t > u.t),
+      biometrias: s.biometrias.filter(b => b.t > u.bio),
+      refeicoes: s.refeicoes.filter(r => r.t > u.ref && r.origem === 'tabela'),
+      diario: s.diario.filter(d => d.t > u.dia) };
+    this.marcarEnviado();
+    // registro do que iria para o broker, no formato do contrato de tópicos
+    const hora = fmtHora(s.t);
+    for (const [k, v] of Object.entries(m.leituras)) this.logMsgs.push(`${hora}  ${TOPICO}${k}  ${v}`);
+    for (const b of m.biometrias) this.logMsgs.push(`${hora}  ${TOPICO}biomassa/peso_medio  ${b.W}`);
+    for (const r of m.refeicoes) this.logMsgs.push(`${hora}  ${TOPICO}manejo/racao_ofertada  ${r.kg}`);
+    if (this.logMsgs.length > 160) this.logMsgs.splice(0, this.logMsgs.length - 160);
+    return m;
+  }
+  comando(topico, valor) {
+    const ok = this.sim.comando(topico, valor);
+    if (topico !== 'servidor/status') this.logMsgs.push(`${fmtHora(this.sim.t)}  ← ${TOPICO}${topico}  ${valor}${ok ? '' : '  (não entregue: sem internet)'}`);
+    return ok;
+  }
+}
+
+/* ---------------- gráficos em canvas ---------------- */
+function prepararCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(10, Math.round(r.width)), h = Math.max(10, Math.round(r.height));
+  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  return { g, w, h };
+}
+function passoBonito(faixa, alvo) { const bruto = faixa / alvo, p = Math.pow(10, Math.floor(Math.log10(bruto))), n = bruto / p; return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * p; }
+function grafico(cv, o) {
+  const { g, w, h } = prepararCanvas(cv);
+  const m = { l: 40, r: 12, t: 10, b: 24 };
+  const X = t => m.l + (t - o.x0) / (o.x1 - o.x0) * (w - m.l - m.r);
+  const Y = v => m.t + (1 - (v - o.y0) / (o.y1 - o.y0)) * (h - m.t - m.b);
+  const linha = cor('line'), ink2 = cor('ink-2'), ink3 = cor('ink-3');
+  g.font = '11px ' + getComputedStyle(document.body).fontFamily; g.textBaseline = 'middle';
+  // faixas de fundo (ex.: aerador ligado, faixa ótima)
+  for (const f of o.faixasX || []) { g.fillStyle = f.cor; g.globalAlpha = f.alfa ?? 0.14; g.fillRect(X(f.t0), m.t, Math.max(1, X(f.t1) - X(f.t0)), h - m.t - m.b); g.globalAlpha = 1; }
+  for (const f of o.faixasY || []) {
+    const ya = Y(Math.min(f.y1, o.y1)), yb = Y(Math.max(f.y0, o.y0)); if (yb - ya <= 0) continue;
+    g.fillStyle = f.cor; g.globalAlpha = f.alfa ?? 0.1; g.fillRect(m.l, ya, w - m.l - m.r, yb - ya); g.globalAlpha = 1;
+    if (f.r && yb - ya >= 14) { g.fillStyle = f.cor; g.globalAlpha = 0.85; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillText(f.r, w - m.r - 4, ya + 2); g.globalAlpha = 1; g.textBaseline = 'middle'; }
+  }
+  // grade horizontal
+  const py = passoBonito(o.y1 - o.y0, 5);
+  g.strokeStyle = linha; g.lineWidth = 1; g.fillStyle = ink2; g.textAlign = 'right';
+  for (let v = Math.ceil(o.y0 / py) * py; v <= o.y1 + 1e-9; v += py) { const y = Math.round(Y(v)) + 0.5; g.beginPath(); g.moveTo(m.l, y); g.lineTo(w - m.r, y); g.stroke(); g.fillText(fmt(v, o.casas ?? (py < 0.1 ? 2 : py < 1 ? 1 : 0)), m.l - 6, y); }
+  // eixo do tempo
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for (const tk of o.ticksX(X)) { g.fillStyle = ink2; g.fillText(tk.r, tk.x, h - m.b + 6); g.strokeStyle = linha; g.beginPath(); g.moveTo(Math.round(tk.x) + 0.5, h - m.b); g.lineTo(Math.round(tk.x) + 0.5, h - m.b + 4); g.stroke(); }
+  // limites horizontais rotulados
+  for (const l of o.limites || []) {
+    const y = Math.round(Y(l.y)) + 0.5; g.strokeStyle = l.cor; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(m.l, y); g.lineTo(w - m.r, y); g.stroke(); g.setLineDash([]);
+    g.fillStyle = l.cor; g.textAlign = l.dir ? 'right' : 'left'; g.textBaseline = 'bottom'; g.fillText(l.r, l.dir ? w - m.r - 4 : m.l + 4, y - 2);
+  }
+  // bandas de incerteza
+  for (const b of o.bandas || []) {
+    if (b.pts.length < 2) continue; g.fillStyle = b.cor; g.globalAlpha = 0.16; g.beginPath();
+    b.pts.forEach((p, i) => i ? g.lineTo(X(p.t), Y(clamp(p.hi, o.y0, o.y1))) : g.moveTo(X(p.t), Y(clamp(p.hi, o.y0, o.y1))));
+    for (let i = b.pts.length - 1; i >= 0; i--) g.lineTo(X(b.pts[i].t), Y(clamp(b.pts[i].lo, o.y0, o.y1)));
+    g.closePath(); g.fill(); g.globalAlpha = 1;
+  }
+  // séries
+  for (const s of o.series) {
+    if (!s.pts.length) continue;
+    g.strokeStyle = s.cor; g.lineWidth = s.larg || 2; g.setLineDash(s.tracejado ? [5, 4] : []); g.lineJoin = 'round';
+    if (s.area) {
+      g.fillStyle = s.cor; g.globalAlpha = 0.09; g.beginPath(); g.moveTo(X(s.pts[0].t), Y(o.y0));
+      for (const p of s.pts) g.lineTo(X(p.t), Y(clamp(p.v, o.y0, o.y1))); g.lineTo(X(s.pts[s.pts.length - 1].t), Y(o.y0)); g.closePath(); g.fill(); g.globalAlpha = 1;
+    }
+    if (s.pontos) { g.fillStyle = s.cor; for (const p of s.pts) { g.beginPath(); g.arc(X(p.t), Y(p.v), 3.5, 0, 7); g.fill(); } continue; }
+    g.beginPath(); let ant = null;
+    for (const p of s.pts) { const x = X(p.t), y = Y(clamp(p.v, o.y0, o.y1)); if (ant && p.t - ant.t > (s.gap || Infinity)) g.moveTo(x, y); else if (!ant) g.moveTo(x, y); else g.lineTo(x, y); ant = p; }
+    g.stroke(); g.setLineDash([]);
+    if (s.ponta) { const p = s.pts[s.pts.length - 1]; g.fillStyle = s.cor; g.beginPath(); g.arc(X(p.t), Y(clamp(p.v, o.y0, o.y1)), 4, 0, 7); g.fill(); }
+  }
+  // linha de "agora"
+  if (o.agora) { const x = Math.round(X(o.agora)) + 0.5; g.strokeStyle = ink3; g.lineWidth = 1; g.beginPath(); g.moveTo(x, m.t); g.lineTo(x, h - m.b); g.stroke(); g.fillStyle = ink2; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText('agora', x, m.t); }
+  for (const mk of o.marcas || []) { g.fillStyle = mk.cor; g.beginPath(); g.arc(X(mk.t), Y(mk.v), 5, 0, 7); g.fill(); g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(mk.r, X(mk.t), Y(mk.v) - 7); }
+}
+const ticksHoras = (x0, x1, cada) => X => { const out = []; for (let t = Math.ceil(x0 / (cada * H)) * cada * H; t <= x1; t += cada * H) out.push({ x: X(t), r: fmtHora(t) === '00:00' ? fmtDiaMes(t) : fmtHora(t) }); return out; };
+const faixaTexto = (f, u) => { const n = v => String(v).replace('.', ','); const uu = u ? ' ' + u : '';
+  return f.de === -Infinity ? `abaixo de ${n(f.ate)}${uu}` : f.ate === Infinity ? `${n(f.de)}${uu} ou mais` : `${n(f.de)} a ${n(f.ate)}${uu}`; };
+const ESCALA_REGUA = { temp: [8, 36], od: [0, 12], ph: [4, 11.5], nh3: [0, 0.2] };
+const COR_ZONA = { ideal: ['ok', 0.09], atencao: ['warn', 0.11], critico: ['crit', 0.10], morte: ['crit', 0.24] };
+const faixasDeZona = (k, rotulos = true) => ZONAS[k].faixas.map(f => ({ y0: f.de, y1: f.ate, cor: cor(COR_ZONA[f.nivel][0]), alfa: COR_ZONA[f.nivel][1], r: rotulos ? f.r : null }));
+function sparkline(cv, pts, c, y0, y1, zona) {
+  const { g, w, h } = prepararCanvas(cv); pts = pts.filter(v => v != null && isFinite(v)); if (pts.length < 2) return;
+  let lo = y0 ?? Math.min(...pts), hi = y1 ?? Math.max(...pts); if (hi - lo < 1e-6) { hi += 1; lo -= 1; }
+  const X = i => i / (pts.length - 1) * (w - 4) + 2, Y = v => 3 + (1 - (v - lo) / (hi - lo)) * (h - 6);
+  if (zona) for (const f of faixasDeZona(zona, false)) { const ya = Math.max(0, Y(Math.min(f.y1, hi + (hi - lo)))), yb = Math.min(h, Y(Math.max(f.y0, lo - (hi - lo)))); if (yb > ya) { g.fillStyle = f.cor; g.globalAlpha = f.alfa * 1.6; g.fillRect(0, ya, w, yb - ya); g.globalAlpha = 1; } }
+  g.strokeStyle = c; g.lineWidth = 1.5; g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.stroke();
+  g.fillStyle = c; g.beginPath(); g.arc(X(pts.length - 1), Y(pts[pts.length - 1]), 2.5, 0, 7); g.fill();
+}
+
+/* ---------------- controles do simulador (aba própria ou gaveta do painel) ---------------- */
+const EVENTOS = [
+  { id: 'algas', titulo: 'Colapso das algas', texto: 'A fotossíntese cai 70% por 24 h e a matéria orgânica sobe. O OD despenca na noite seguinte.', aplicar: s => { s.efeito('v.algas', 0.3, 24, 'Colapso das algas'); s.v.carga += 12; s.s.carga += 12; } },
+  { id: 'frio', titulo: 'Onda de frio', texto: 'Ar 9 °C abaixo do normal por 3 dias. A água esfria, o apetite cai e o gêmeo corta a ração.', aplicar: s => s.efeito('ctl.deltaTempAr', -9, 72, 'Onda de frio') },
+  { id: 'calor', titulo: 'Calor extremo', texto: 'Ar 6 °C acima do normal por 2 dias. Água quente segura menos oxigênio.', aplicar: s => s.efeito('ctl.deltaTempAr', 6, 48, 'Calor extremo') },
+  { id: 'chuva', titulo: 'Dia nublado e chuvoso', texto: 'Céu fechado e chuva por 8 h. Pouca luz, pouca fotossíntese.', aplicar: s => { s.efeito('ctl.nuvemManual', 0.2, 8, 'Dia nublado e chuvoso'); s.efeito('ctl.chuvaForcada', true, 8); } },
+  { id: 'amonia', titulo: 'Pico de amônia', texto: 'A amônia total sobe 2,5 mg/L, como depois de sobra de ração acumulada.', aplicar: s => { s.v.TAN += 2.5; s.s.TAN += 2.5; s.registrar('Pico de amônia'); } },
+  { id: 'internet', titulo: 'Queda de internet', texto: 'O ESP32 fica 3 h sem conexão. O fallback local assume o aerador e os dados ficam guardados.', aplicar: s => s.efeito('ctl.internet', false, 3, 'Queda de internet') },
+  { id: 'aerador', titulo: 'Falha do aerador', texto: 'Por 4 h o motor liga, mas não aera. O gêmeo percebe pelo OD que não sobe.', aplicar: s => s.efeito('ctl.falhaAerador', true, 4, 'Falha do aerador') },
+  { id: 'sensor', titulo: 'Sonda de OD descalibrada', texto: 'Por 2 h a sonda lê 2,5 mg/L a menos. O gêmeo compara com o modelo e desconfia.', aplicar: s => s.efeito('ctl.offsetOD', -2.5, 2, 'Sonda de OD descalibrada') },
+  { id: 'normal', titulo: 'Voltar ao normal', texto: 'Encerra os efeitos ativos e destrava os sensores.', aplicar: s => { const manejo = s.ctl.manejo; s.temporarios = []; s.ctl = CONTROLES_PADRAO(); s.ctl.manejo = manejo; s.v.algas = 1; s.s.algas = 1; s.registrar('Condições normais restauradas'); } }
+];
+const SENSORES = [
+  { k: 'Tw', nome: 'Temperatura da água', un: '°C', min: 10, max: 38, passo: 0.1, d: 1 },
+  { k: 'OD', nome: 'Oxigênio dissolvido', un: 'mg/L', min: 0, max: 20, passo: 0.1, d: 1 },
+  { k: 'pH', nome: 'pH', un: '', min: 5, max: 10, passo: 0.05, d: 2 },
+  { k: 'TAN', nome: 'Amônia total (NAT)', un: 'mg/L', min: 0, max: 6, passo: 0.05, d: 2 }
+];
+function montarControles(raiz, obterMotor, aoMudar) {
+  raiz.innerHTML = `
+  <section class="card s12">
+    <header><h2>Tempo e cenário</h2><span class="sutil" id="c-relogio"></span></header>
+    <div class="velocidades" id="c-vel">${VELOCIDADES.map(([v, r]) => `<button class="btn" data-vel="${v}">${r}</button>`).join('')}<button class="btn" id="c-pausa">Pausar</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label class="rotulo" for="c-cenario">Estação</label>
+      <select id="c-cenario" class="btn">${Object.entries(CENARIOS).map(([k, c]) => `<option value="${k}">${c.nome} (${c.detalhe})</option>`).join('')}</select>
+      <button class="btn" id="c-reiniciar">Reiniciar neste cenário</button>
+    </div>
+  </section>
+  <section class="card s12">
+    <header><h2>Cenários para a apresentação</h2><span class="sutil">Um clique dispara o evento no viveiro simulado</span></header>
+    <div class="eventos">${EVENTOS.map(e => `<button class="evento" data-ev="${e.id}"><b>${e.titulo}</b><span>${e.texto}</span></button>`).join('')}</div>
+  </section>
+  <section class="card s6">
+    <header><h2>Sensores do viveiro</h2><span class="sutil">Arraste para mudar; trave para segurar o valor</span></header>
+    <div>${SENSORES.map(x => `<div class="slider"><label for="c-s-${x.k}">${x.nome}</label><output id="c-o-${x.k}">--</output>
+      <input type="range" id="c-s-${x.k}" min="${x.min}" max="${x.max}" step="${x.passo}">
+      <div class="opcoes"><label><input type="checkbox" id="c-t-${x.k}"> Travar neste valor</label><span>${x.un}</span></div></div>`).join('')}</div>
+  </section>
+  <section class="card s6">
+    <header><h2>Clima</h2><span class="sutil" id="c-clima"></span></header>
+    <div>
+      <div class="slider"><label for="c-dta">Desvio da temperatura do ar</label><output id="c-o-dta">0 °C</output><input type="range" id="c-dta" min="-12" max="8" step="0.5"></div>
+      <div class="slider"><label for="c-nuvem">Luz do sol (100% = céu limpo)</label><output id="c-o-nuvem">auto</output><input type="range" id="c-nuvem" min="0.1" max="1" step="0.05">
+        <div class="opcoes"><label><input type="checkbox" id="c-nuvem-auto" checked> Automático pelo clima do dia</label></div></div>
+      <div class="slider"><label for="c-vento">Vento extra</label><output id="c-o-vento">0 m/s</output><input type="range" id="c-vento" min="-2" max="8" step="0.5"></div>
+      <div class="alternar"><label for="c-chuva">Chuva agora<small>Nuvens e queda de temperatura do ar</small></label><input type="checkbox" class="troca" id="c-chuva"></div>
+    </div>
+  </section>
+  <section class="card s6">
+    <header><h2>Dispositivo e manejo</h2><span class="sutil" id="c-aer"></span></header>
+    <div>
+      <div class="alternar"><label for="c-net">Internet do ESP32<small>Desligada, o painel fica sem dados e o ESP32 decide sozinho</small></label><input type="checkbox" class="troca" id="c-net"></div>
+      <div class="alternar"><label for="c-falha">Aerador com defeito<small>Liga, mas não oxigena a água</small></label><input type="checkbox" class="troca" id="c-falha"></div>
+      <div class="alternar"><label for="c-manejo">Viveiro seguindo o gêmeo<small>Desligado, o tratador usa a tabela fixa (8h e 16h)</small></label><input type="checkbox" class="troca" id="c-manejo"></div>
+      <div class="alternar"><label>Biometria<small id="c-bio">Pesagem de amostra com a balança</small></label><button class="btn" id="c-biometria">Pesar agora</button></div>
+    </div>
+  </section>
+  <section class="card s6">
+    <header><h2>Gêmeo x manejo tradicional</h2><span class="sutil" id="c-comp-dias"></span></header>
+    <p class="sutil" style="margin:0;font-size:.84rem">Um segundo viveiro, igual e sob o mesmo clima, segue a tabela fixa de ração e o aerador das 23h às 6h.</p>
+    <div class="tabela-rolagem"><table class="comp"><thead><tr><th>Indicador</th><th>Gêmeo</th><th>Tradicional</th></tr></thead><tbody id="c-comp"></tbody></table></div>
+  </section>
+  <section class="card s12">
+    <header><h2>Mensagens do ESP32</h2><span class="sutil">O que seria publicado no broker, tópico por tópico</span></header>
+    <div class="mensagens" id="c-msgs"></div>
+  </section>
+  <section class="card s12">
+    <header><h2>Eventos no viveiro</h2></header>
+    <ul class="log" id="c-eventos"></ul>
+  </section>`;
+  const M = obterMotor;
+  raiz.querySelectorAll('[data-vel]').forEach(b => b.onclick = () => { M().vel = +b.dataset.vel; aoMudar(); });
+  $('#c-pausa', raiz).onclick = () => { M().pausado = !M().pausado; aoMudar(); };
+  $('#c-reiniciar', raiz).onclick = () => { aoMudar('reiniciar', $('#c-cenario', raiz).value); };
+  raiz.querySelectorAll('[data-ev]').forEach(b => b.onclick = () => { EVENTOS.find(e => e.id === b.dataset.ev).aplicar(M().sim); aoMudar(); });
+  for (const x of SENSORES) {
+    const sl = $('#c-s-' + x.k, raiz), tr = $('#c-t-' + x.k, raiz);
+    sl.addEventListener('pointerdown', () => sl.dataset.mexendo = '1');
+    window.addEventListener('pointerup', () => delete sl.dataset.mexendo);
+    sl.oninput = () => { const v = +sl.value, s = M().sim; s.v[x.k] = v; if (tr.checked) s.ctl.travas[x.k] = v; $('#c-o-' + x.k, raiz).textContent = fmt(v, x.d) + ' ' + x.un; };
+    tr.onchange = () => { const s = M().sim; if (tr.checked) s.ctl.travas[x.k] = +sl.value; else delete s.ctl.travas[x.k]; };
+  }
+  const dta = $('#c-dta', raiz); dta.oninput = () => { M().sim.ctl.deltaTempAr = +dta.value; aoMudar(); };
+  const nv = $('#c-nuvem', raiz), na = $('#c-nuvem-auto', raiz);
+  nv.oninput = () => { na.checked = false; M().sim.ctl.nuvemManual = +nv.value; aoMudar(); };
+  na.onchange = () => { M().sim.ctl.nuvemManual = na.checked ? null : +nv.value; aoMudar(); };
+  const ve = $('#c-vento', raiz); ve.oninput = () => { M().sim.ctl.ventoExtra = +ve.value; aoMudar(); };
+  $('#c-chuva', raiz).onchange = e => { M().sim.ctl.chuvaForcada = e.target.checked; aoMudar(); };
+  $('#c-net', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.internet'); s.ctl.internet = e.target.checked; s.registrar(e.target.checked ? 'Internet do ESP32 restabelecida' : 'Internet do ESP32 desligada'); aoMudar(); };
+  $('#c-falha', raiz).onchange = e => { const s = M().sim; s.temporarios = s.temporarios.filter(t => t.chave !== 'ctl.falhaAerador'); s.ctl.falhaAerador = e.target.checked; aoMudar(); };
+  $('#c-manejo', raiz).onchange = e => { M().sim.ctl.manejo = e.target.checked ? 'gemeo' : 'tradicional'; M().sim.registrar(e.target.checked ? 'Viveiro passa a seguir o gêmeo' : 'Viveiro passa ao manejo tradicional'); aoMudar(); };
+  $('#c-biometria', raiz).onclick = () => { const b = M().sim.biometria(); M().sim.registrar(`Biometria: peso médio ${fmt(b.W, 1)} g`); aoMudar(); };
+}
+function atualizarControles(raiz, motor) {
+  if (!raiz.firstElementChild) return;
+  const s = motor.sim, v = s.v, c = s.clima;
+  $('#c-relogio', raiz).textContent = `${fmtData(s.t)} · ${fmtHora(s.t)} · ${CENARIOS[s.cenario].nome}`;
+  raiz.querySelectorAll('[data-vel]').forEach(b => b.classList.toggle('ativo', +b.dataset.vel === motor.vel && !motor.pausado));
+  $('#c-pausa', raiz).textContent = motor.pausado ? 'Continuar' : 'Pausar'; $('#c-pausa', raiz).classList.toggle('ativo', motor.pausado);
+  if (document.activeElement !== $('#c-cenario', raiz)) $('#c-cenario', raiz).value = s.cenario;
+  const ativos = new Set(s.temporarios.map(e => e.rotulo).filter(Boolean));
+  raiz.querySelectorAll('[data-ev]').forEach(b => { const e = EVENTOS.find(x => x.id === b.dataset.ev); b.classList.toggle('ativo', ativos.has(e.titulo)); });
+  for (const x of SENSORES) {
+    const sl = $('#c-s-' + x.k, raiz), tr = $('#c-t-' + x.k, raiz);
+    const val = s.ctl.travas[x.k] ?? v[x.k];
+    if (!sl.dataset.mexendo && document.activeElement !== sl) { sl.value = val; $('#c-o-' + x.k, raiz).textContent = fmt(val, x.d) + (x.un ? ' ' + x.un : ''); }
+    tr.checked = s.ctl.travas[x.k] != null;
+  }
+  const dta = $('#c-dta', raiz); if (document.activeElement !== dta) dta.value = s.ctl.deltaTempAr;
+  $('#c-o-dta', raiz).textContent = (s.ctl.deltaTempAr > 0 ? '+' : '') + fmt(s.ctl.deltaTempAr, 1) + ' °C';
+  const na = $('#c-nuvem-auto', raiz), nv = $('#c-nuvem', raiz); na.checked = s.ctl.nuvemManual == null;
+  if (document.activeElement !== nv) nv.value = s.ctl.nuvemManual ?? c.nuvem;
+  $('#c-o-nuvem', raiz).textContent = Math.round((s.ctl.nuvemManual ?? c.nuvem) * 100) + '%' + (na.checked ? ' (auto)' : '');
+  const ve = $('#c-vento', raiz); if (document.activeElement !== ve) ve.value = s.ctl.ventoExtra; $('#c-o-vento', raiz).textContent = fmt(s.ctl.ventoExtra, 1) + ' m/s';
+  $('#c-chuva', raiz).checked = !!s.ctl.chuvaForcada;
+  $('#c-clima', raiz).textContent = `Ar ${fmt(c.Ta, 1)} °C · ${Math.round(c.UR)}% · ${Math.round(c.rad)} W/m²`;
+  $('#c-net', raiz).checked = s.ctl.internet; $('#c-falha', raiz).checked = !!s.ctl.falhaAerador; $('#c-manejo', raiz).checked = s.ctl.manejo === 'gemeo';
+  const origem = { gemeo: 'pelo gêmeo', 'fallback local': 'pelo fallback local', 'seguranca local': 'pela segurança local', tradicional: 'pelo horário fixo' }[s.origemAerador] || '';
+  $('#c-aer', raiz).textContent = `Aerador ${v.aerador ? 'ligado' : 'desligado'} ${origem}`;
+  const ub = s.biometrias[s.biometrias.length - 1];
+  $('#c-bio', raiz).textContent = `Peso real ${fmt(v.W, 1)} g · ${Math.round(v.N).toLocaleString('pt-BR')} peixes` + (ub ? ` · última pesagem ${fmtDiaMes(ub.t)}: ${fmt(ub.W, 1)} g` : '');
+  // comparação
+  const cp = s.comparacao(), G = cp.gemeo, T = cp.tradicional;
+  $('#c-comp-dias', raiz).textContent = cp.dias < 0.05 ? 'começa agora' : `há ${fmt(cp.dias, 1)} dias simulados`;
+  const linha = (nome, a, b, d, un, menorMelhor = true) => {
+    const melhorA = a != null && b != null && Math.abs(a - b) > 1e-6 && (menorMelhor ? a < b : a > b);
+    const melhorB = a != null && b != null && Math.abs(a - b) > 1e-6 && !melhorA;
+    return `<tr><td>${nome}</td><td class="${melhorA ? 'melhor' : ''}">${a == null ? '--' : fmt(a, d) + un}</td><td class="${melhorB ? 'melhor' : ''}">${b == null ? '--' : fmt(b, d) + un}</td></tr>`;
+  };
+  $('#c-comp', raiz).innerHTML = linha('Ração ofertada', G.racao, T.racao, 1, ' kg') + linha('Ração desperdiçada', G.desperdicio, T.desperdicio, 1, ' kg')
+    + linha('Ganho de biomassa', G.ganho, T.ganho, 1, ' kg', false) + linha('Conversão alimentar', G.ca, T.ca, 2, '')
+    + linha('Aerador ligado', G.horasAerador, T.horasAerador, 1, ' h') + linha('OD mínimo', G.odMin > 90 ? null : G.odMin, T.odMin > 90 ? null : T.odMin, 1, ' mg/L', false)
+    + linha('Peixes mortos', G.mortos, T.mortos, 0, '') + linha('Peso médio', G.W, T.W, 1, ' g', false);
+  const msgs = $('#c-msgs', raiz), noFim = msgs.scrollTop + msgs.clientHeight >= msgs.scrollHeight - 30;
+  msgs.innerHTML = motor.logMsgs.slice(-60).map(l => esc(l).replace(/(gemeo\/viveiro1\/\S+)/, '<span class="top">$1</span>')).join('\n');
+  if (noFim) msgs.scrollTop = msgs.scrollHeight;
+  $('#c-eventos', raiz).innerHTML = s.eventos.slice(-12).reverse().map(e => `<li><time>${fmtHora(e.t)}</time><span>${esc(e.txt)}</span></li>`).join('') || '<li class="sutil">Nenhum evento ainda.</li>';
+}
+
+/* ---------------- painel do gêmeo ---------------- */
+const ORIGEM = { GEMEO: 'Gêmeo digital', FALLBACK_LOCAL: 'Fallback local do ESP32', SEGURANCA_LOCAL: 'Segurança local do ESP32', TRADICIONAL: 'Horário fixo do tratador' };
+function iniciarPainel() {
+  const bus = new Barramento();
+  const est = { modo: 'procurando', motor: null, ultimoTick: 0, vel: 5, pausado: false, ticks: 0, offlineDesde: null };
+  const enviar = (topico, valor) => {
+    bus.comandoContrato(topico, valor);
+    if (est.modo === 'interno') est.motor.comando(topico, valor);
+    else bus.enviar({ tipo: 'comando', topico, valor });
+  };
+  const gemeo = new Gemeo(enviar);
+  window.__gemeo = gemeo; window.__est = est; window.__bus = bus;
+  const gav = $('#gaveta'), ctlInt = $('#controles-internos');
+
+  function iniciarInterno(snapshot) {
+    const sim = snapshot ? Simulador.restaurar(snapshot.estado) : new Simulador(gemeo.cenario || 'verao');
+    est.motor = new Motor(sim, snapshot ? snapshot.vel : est.vel); est.modo = 'interno';
+    gemeo.sincronizar(est.motor.sync()); sim.gemeoAtivo = true; sim.ultimoComando = sim.t;
+    montarControles(ctlInt, () => est.motor, (acao, arg) => { if (acao === 'reiniciar') { est.motor = new Motor(new Simulador(arg), est.motor.vel); gemeo.sincronizar(est.motor.sync()); est.motor.sim.gemeoAtivo = true; } passo(0); });
+    render();
+  }
+  function passo(seg) {
+    if (est.modo !== 'interno') return;
+    est.motor.avancar(seg);
+    const m = est.motor.mensagem();
+    bus.espelhar(m.leituras, m.t);
+    tratar(m);
+    atualizarControles(ctlInt, est.motor);
+  }
+  function tratar(m) {
+    if (est.modo === 'interno' && !m.offline) bus.enviar({ ...m, tipo: 'tick-espelho' });
+    est.ultimoTick = Date.now(); est.vel = m.vel; est.pausado = m.pausado;
+    if (m.offline) { gemeo.t = m.t; gemeo.online = false; if (!est.offlineDesde) est.offlineDesde = m.t; gemeo.atualizarAlertas(); }
+    else { est.offlineDesde = null; gemeo.receber(m); }
+    if (++est.ticks % 4 === 0) enviar('servidor/status', 'ONLINE');
+    if (pv) pv.tick(m.t);
+    render();
+  }
+  bus.on(m => {
+    if (m.tipo === 'quem-simula?' && est.modo === 'interno') {
+      bus.enviar({ tipo: 'snapshot', estado: est.motor.sim.snapshot(), vel: est.motor.vel });
+      est.modo = 'externo'; est.motor = null; gav.hidden = true; ctlInt.innerHTML = ''; render();
+    } else if (m.tipo === 'sync') { if (est.modo === 'interno' || (m.para && m.para !== bus.id)) return; est.modo = 'externo'; gemeo.sincronizar(m); est.ultimoTick = Date.now(); render(); }
+    else if (m.tipo === 'tick') { if (est.modo === 'interno') return; if (est.modo !== 'externo') { est.modo = 'externo'; bus.enviar({ tipo: 'pedir-sync' }); return; } tratar(m); }
+    else if (m.tipo === 'tchau' && est.modo === 'externo') { est.ultimoTick = 0; render(); }
+    else if (m.tipo === 'pedir-sync' && est.modo === 'interno') bus.enviar({ ...est.motor.sync(), para: m.de });
+    else if (m.tipo === 'pedir-previsao' && est.modo === 'interno') bus.enviar({ tipo: 'previsao', para: m.de, t: est.motor.sim.t, cenario: est.motor.sim.cenario, dias: est.motor.sim.previsaoClima(7) });
+  });
+  bus.pronto.then(() => { bus.enviar({ tipo: 'pedir-sync' }); setTimeout(() => { if (est.modo === 'procurando') iniciarInterno(); }, 900); });
+  setInterval(() => passo(0.25), 250);
+  setInterval(() => { if (est.modo === 'externo' && Date.now() - est.ultimoTick > 4000) render(); }, 1000);
+
+  // controle pelo celular: servidor local (servidor.py) ou broker MQTT na internet com código de sala
+  let emIframe0 = false; try { emIframe0 = window.self !== window.top; } catch (_) { emIframe0 = true; }
+  $('#bt-celular').hidden = emIframe0;
+  bus.aoMudarRede = () => { render(); if (!$('#modal-celular').hidden) mostrarCelular(); };
+  async function mostrarCelular() {
+    $('#modal-celular').hidden = false;
+    const hospedado = /^https?:$/.test(location.protocol);
+    $('#mc-config').hidden = !!bus.modoRede || !hospedado; $('#mc-conectado').hidden = !bus.modoRede;
+    $('#mc-arquivo').hidden = hospedado || !!bus.modoRede;
+    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}` : bus.erroRede ? `Sem conexão com o broker (${bus.erroRede})` : 'Conectando ao broker...';
+    $('#mc-estado').className = 'pill ' + (bus.mqttOk ? 'ok' : bus.modoRede ? 'warn' : '');
+    $('#bt-mc-desligar').hidden = bus.modoRede !== 'nuvem';
+    if (!bus.modoRede) return;
+    const url = bus.linkCelular();
+    try { if (!window.qrcode) await carregarScript('qrcode.js'); const q = qrcode(0, 'L'); q.addData(url); q.make(); $('#mc-qr').innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); } catch (_) { $('#mc-qr').textContent = ''; }
+    $('#mc-url').textContent = bus.modoRede === 'local' ? url : url.split('#')[0];
+    const outros = bus.modoRede === 'local' ? bus.info.ips.slice(1).map(ip => `http://${ip}:${bus.info.porta}/simulador.html`) : [];
+    $('#mc-outros').textContent = outros.length ? 'Se não abrir, tente: ' + outros.join(' · ') : '';
+  }
+  $('#bt-celular').onclick = () => { if (!$('#mc-broker').value) $('#mc-broker').value = BROKER_PADRAO; mostrarCelular(); };
+  $('#bt-mc-conectar').onclick = async () => {
+    const cfg = { url: $('#mc-broker').value.trim() || BROKER_PADRAO, sala: novaSala() };
+    const u = $('#mc-usuario').value.trim(); if (u) { cfg.usuario = u; cfg.senha = $('#mc-senha').value; }
+    bus.usarNuvem(cfg); mostrarCelular();
+  };
+  $('#bt-mc-desligar').onclick = () => { bus.desligarNuvem(); mostrarCelular(); };
+  $('#bt-fechar-celular').onclick = () => { $('#modal-celular').hidden = true; };
+  $('#modal-celular').onclick = e => { if (e.target.id === 'modal-celular') $('#modal-celular').hidden = true; };
+
+  // abas internas: Painel, Previsão 7 dias e Fontes na mesma página
+  let vista = 'painel';
+  const pv = iniciarPrevisao({ bus, gemeo, visivel: () => vista === 'previsao', simDireto: () => est.modo === 'interno' ? est.motor.sim.previsaoClima(7) : null });
+  iniciarFontes();
+  function mostrar(v) {
+    vista = v;
+    document.querySelectorAll('.abas [data-vista]').forEach(b => { if (b.dataset.vista === v) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    ['painel', 'previsao', 'fontes'].forEach(k => { $('#vista-' + k).hidden = k !== v; });
+    window.scrollTo(0, 0);
+    if (v === 'previsao') pv.abrir(); else if (v === 'painel') render();
+  }
+  document.querySelectorAll('.abas [data-vista]').forEach(b => b.onclick = () => mostrar(b.dataset.vista));
+  // dentro da versão publicada (iframe), abrir outra aba levaria ao navegador externo: usa a gaveta de controles
+  let emIframe = false; try { emIframe = window.self !== window.top; } catch (_) { emIframe = true; }
+  if (emIframe) $('#bt-abrir-sim').hidden = true;
+  window.__mostrar = mostrar;
+
+  // botões
+  $('#bt-ligar').onclick = () => { gemeo.modoAeracao = 'MANUAL'; gemeo.comandarAerador(true, null, true); render(); };
+  $('#bt-desligar').onclick = () => { gemeo.modoAeracao = 'MANUAL'; gemeo.comandarAerador(false, null, true); render(); };
+  $('#bt-auto').onclick = () => { gemeo.modoAeracao = 'AUTO'; gemeo.registrarAcao(gemeo.t, 'Aeração devolvida ao modo automático'); gemeo.ciclo(); render(); };
+  $('#bt-controles').onclick = () => { if (est.modo === 'interno') gav.hidden = !gav.hidden; };
+  $('#bt-fechar-gaveta').onclick = () => gav.hidden = true;
+  $('#bt-rodar-aqui').onclick = () => iniciarInterno();
+  window.addEventListener('resize', () => render());
+  const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', () => render());
+
+  function estadoValor(k, v) {
+    const n = nivelZona(k, v);
+    return n == null ? '' : n === 'ideal' ? 'ok' : n === 'atencao' ? 'atencao' : 'critico';
+  }
+  document.querySelectorAll('.fonte-zona[data-zona]').forEach(el => { const z = ZONAS[el.dataset.zona]; el.innerHTML = `<b>Zonas para a tilápia-do-nilo:</b> ${z.faixas.map(f => `${f.r} ${faixaTexto(f, z.unid)}`).join(' · ')}. Fontes: ${z.fonte}.`; });
+  function render() {
+    const g = gemeo, L = g.L, a = g.atual, t = g.t;
+    if (t == null) return;
+    const semSinal = est.modo === 'externo' && Date.now() - est.ultimoTick > 4000;
+    // topo
+    $('#hora').textContent = fmtHora(t); $('#data').textContent = fmtData(t) + ' · ' + (CENARIOS[g.cenario] ? CENARIOS[g.cenario].nome : '');
+    const online = g.online && !semSinal;
+    $('#chip-disp').className = 'chip ' + (online ? 'ok' : 'crit');
+    $('#chip-disp').textContent = online ? 'ESP32 online' : semSinal ? 'Simulador parado' : 'ESP32 offline';
+    $('#chip-fonte').textContent = est.modo === 'interno' ? 'Simulação nesta aba' : est.modo === 'externo' ? (bus.mqttOk ? 'Simulador via ' + bus.descricaoRede() : 'Simulador em outra aba') : 'Procurando simulador';
+    $('#chip-aer').className = 'chip ' + (g.modoAeracao === 'AUTO' ? 'ok' : 'warn');
+    $('#chip-aer').textContent = 'Aeração ' + (g.modoAeracao === 'AUTO' ? 'automática' : 'manual');
+    $('#chip-vel').textContent = est.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === est.vel) || [0, ''])[1];
+    $('#bt-controles').hidden = est.modo !== 'interno';
+    $('#aviso-parado').hidden = !semSinal;
+    $('#aviso-offline').hidden = !(est.offlineDesde && !semSinal);
+    if (est.offlineDesde) $('#aviso-offline-txt').textContent = `Sem dados do ESP32 desde ${fmtHora(est.offlineDesde)}. O dispositivo segue com o fallback local e guarda as leituras para enviar quando voltar.`;
+
+    // leituras
+    const h24 = g.hist.filter(x => x.t > t - DIA);
+    const tile = (id, estado, valor, sub, serie, c, zona) => {
+      const el = $('#' + id); el.dataset.estado = estado || '';
+      $('.valor', el).innerHTML = valor; $('.linha2 span:last-child', el).textContent = sub; $('.linha2 span:last-child', el).title = sub;
+      sparkline($('canvas', el), serie, cor(c));
+      const rg = $('.regua', el);
+      if (rg && zona) {
+        const [lo, hi] = ESCALA_REGUA[zona], pos = v => clamp((v - lo) / (hi - lo) * 100, 0, 100);
+        if (!rg.dataset.pronto) {
+          const corN = { ideal: 'var(--ok)', atencao: 'var(--warn)', critico: 'var(--crit)', morte: 'var(--crit)' };
+          rg.style.background = 'linear-gradient(90deg,' + ZONAS[zona].faixas.map(f => `${corN[f.nivel]} ${pos(f.de)}% ${pos(f.ate)}%`).join(',') + ')';
+          rg.title = ZONAS[zona].faixas.map(f => `${f.r}: ${faixaTexto(f, ZONAS[zona].unid)}`).join(' · '); rg.dataset.pronto = 1;
+        }
+        const val = valorZona[zona]; $('b', rg).style.left = val == null ? '-20px' : pos(val) + '%';
+        const fz = faixaZona(zona, val); const se = $('.selo', el); se.textContent = fz ? fz.r : ''; se.dataset.nivel = fz ? fz.nivel : '';
+      }
+    };
+    const valorZona = { temp: a.temperatura, od: a.od, ph: a.ph, nh3: a.uia };
+    const peso = g.pesoEstimado(), biomassa = peso * g.N / 1000;
+    tile('t-temp', estadoValor('temp', a.temperatura), `${fmt(a.temperatura, 1)}<small>°C</small>`, tendencia(h24, 'Tw', 1, '°C/h'), h24.map(x => x.Tw), 'accent', 'temp');
+    tile('t-od', estadoValor('od', a.od), `${fmt(a.od, 1)}<small>mg/L</small>`, `sat. ${fmt(a.temperatura != null ? a.od / odSat(a.temperatura) * 100 : null, 0)}%`, h24.map(x => x.OD), 'accent', 'od');
+    tile('t-ph', estadoValor('ph', a.ph), `${fmt(a.ph, 2)}`, tendencia(h24, 'pH', 2, '/h'), h24.map(x => x.pH), 'accent', 'ph');
+    tile('t-nh3', estadoValor('nh3', a.uia), `${fmt(a.uia, 3)}<small>mg/L</small>`, `NAT ${fmt(a.tan, 2)} mg/L`, h24.map(x => x.TAN * fracNH3(x.Tw, x.pH)), 'accent', 'nh3');
+    tile('t-ar', '', `${fmt(L['clima/temperatura_ar'], 1)}<small>°C</small>`, `UR ${fmt(L['clima/umidade'], 0)}% · vento ${fmt(L['clima/vento'], 1)} m/s`, h24.map(x => x.Ta), 'ar');
+    tile('t-sol', '', `${fmt(L['clima/radiacao'], 0)}<small>W/m²</small>`, L['clima/chuva'] > 0 ? `chuva ${fmt(L['clima/chuva'], 1)} mm/h` : `pressão ${fmt(L['clima/pressao'], 0)} hPa`, h24.map(x => x.rad), 'racao');
+    tile('t-peixe', '', `${fmt(peso, 0)}<small>g</small>`, `${fmt(biomassa, 0)} kg · ${(g.N || 0).toLocaleString('pt-BR')} peixes`, g.biometrias.map(b => b.W), 'racao');
+
+    // OD: medido, previsto sem aeração e previsto com o plano do gêmeo
+    const x0 = t - DIA, x1 = t + 12 * H;
+    const prev = g.prev;
+    let comPlano = null;
+    if (prev) { let lig = g.aerador; comPlano = preverOD(g.hist, 12, (tt, od) => { if (od < 4) lig = true; else if (od >= 5 && radiacaoCeuLimpo(tt) > 150) lig = false; return lig ? 1 : 0; }); }
+    const serieOD = h24.map(x => ({ t: x.t, v: x.OD }));
+    const faixasAer = []; let ini = null;
+    for (const x of h24) { if (x.aer && ini == null) ini = x.t; if (!x.aer && ini != null) { faixasAer.push({ t0: ini, t1: x.t, cor: cor('accent'), alfa: 0.12 }); ini = null; } }
+    if (ini != null) faixasAer.push({ t0: ini, t1: t, cor: cor('accent'), alfa: 0.12 });
+    const yMax = Math.max(10, ...serieOD.map(p => p.v), ...(prev ? prev.pts.map(p => p.OD + p.sd) : [])) + 0.5;
+    const series = [{ pts: serieOD, cor: cor('accent'), larg: 2.2, area: true, ponta: true, gap: 40 * MIN }];
+    if (prev) series.push({ pts: prev.pts.map(p => ({ t: p.t, v: p.OD })), cor: cor('crit'), tracejado: true, larg: 1.8 });
+    if (comPlano) series.push({ pts: comPlano.pts.map(p => ({ t: p.t, v: p.OD })), cor: cor('accent'), tracejado: true, larg: 1.8 });
+    grafico($('#g-od'), { x0, x1, y0: 0, y1: Math.ceil(yMax), agora: t, ticksX: ticksHoras(x0, x1, 6), faixasX: faixasAer,
+      faixasY: faixasDeZona('od'), limites: [{ y: 4, cor: cor('ink-2'), r: 'aerar abaixo de 4 mg/L (Francis-Floyd, 2003)' }],
+      bandas: prev ? [{ pts: prev.pts.map(p => ({ t: p.t, lo: p.OD - p.sd, hi: p.OD + p.sd })), cor: cor('crit') }] : [], series,
+      marcas: prev && prev.min.OD < 4 ? [{ t: prev.min.t, v: prev.min.OD, cor: cor('crit'), r: fmt(prev.min.OD, 1) }] : [] });
+    if (prev) {
+      const [P, R, k, kA] = prev.ajuste.theta;
+      $('#od-min').textContent = `${fmt(prev.min.OD, 1)} mg/L às ${fmtHora(prev.min.t)}`;
+      $('#od-plano').textContent = comPlano ? `${fmt(comPlano.min.OD, 1)} mg/L` : '--';
+      $('#od-cruza').textContent = prev.abaixo3 ? fmtHora(prev.abaixo3.t) : 'não cruza em 12 h';
+      $('#od-modelo').textContent = `Fotossíntese ${fmt(P, 2)} · respiração ${fmt(R, 2)} mg/L/h · aerador ${fmt(kA, 2)}/h · ${prev.ajuste.amostras} pontos`;
+    }
+
+    // aerador
+    const box = $('#aerador');
+    box.classList.toggle('ligado', g.aerador);
+    $('#aer-estado').textContent = g.aerador ? 'LIGADO' : 'DESLIGADO';
+    $('#aer-origem').textContent = 'Comando: ' + (ORIGEM[g.origemAerador] || '--');
+    ['#bt-ligar', '#bt-desligar', '#bt-auto'].forEach(s => $(s).classList.remove('ativo'));
+    if (g.modoAeracao === 'AUTO') $('#bt-auto').classList.add('ativo'); else $(g.aerador ? '#bt-ligar' : '#bt-desligar').classList.add('ativo');
+    ['#bt-ligar', '#bt-desligar', '#bt-auto'].forEach(s => $(s).disabled = !online);
+    const jan = g.janelaAeracao();
+    let rec;
+    if (!online) rec = '<strong>Sem conexão com o ESP32</strong>Os comandos não chegam ao viveiro. O fallback local liga o aerador se o OD cair abaixo de 3 mg/L.';
+    else if (g.aerador) rec = `<strong>Manter ligado</strong>Desligar depois do amanhecer, com o OD acima de 5 mg/L (Tucker, 2005; Francis-Floyd, 2003).`;
+    else if (jan) rec = `<strong>Ligar por volta das ${fmtHora(jan.t - 20 * MIN)}</strong>Sem aeração, o OD chega a ${fmt(prev.min.OD, 1)} mg/L às ${fmtHora(prev.min.t)}. Regra: aerar quando o OD previsto fica abaixo de 4 mg/L (Francis-Floyd, 2003).`;
+    else rec = '<strong>Sem necessidade nas próximas 12 h</strong>O OD previsto fica acima de 4 mg/L.';
+    $('#aer-rec').innerHTML = rec;
+    const hoje = g.hist.filter(x => x.t >= Math.floor(t / DIA) * DIA);
+    const hAer = hoje.filter(x => x.aer).length / 6;
+    $('#aer-horas').textContent = `${fmt(hAer, 1)} h hoje · ${fmt(hAer * 0.75, 1)} kWh (aerador de 1 cv)`;
+
+    // ração
+    const p = g.plano;
+    if (p) {
+      $('#rac-total').textContent = fmt(p.total, 1);
+      $('#rac-pct').textContent = `${fmt(p.pct, 2)}% do peso vivo`;
+      const dif = p.base > 0 ? (p.total / p.base - 1) * 100 : 0;
+      $('#rac-base').textContent = `Tabela fixa: ${fmt(p.base, 1)} kg (${dif <= 0 ? '' : '+'}${fmt(dif, 0)}%)`;
+      $('#rac-barra').style.width = clamp(p.base > 0 ? p.total / p.base * 100 : 0, 0, 100) + '%';
+      $('#rac-motivo').textContent = p.motivo;
+      $('#rac-ref').innerHTML = p.refeicoes.map(r => {
+        let sit;
+        if (r.executado != null) sit = r.executado > 0 ? `<span class="pill ok">liberada ${fmt(r.executado, 1)} kg</span>` : '<span class="pill crit">suspensa</span>';
+        else if (t > r.t + 45 * MIN) sit = '<span class="pill">não executada</span>';
+        else sit = r.fator < 1 ? `<span class="pill warn">reduzida ${Math.round(r.fator * 100)}%</span>` : '<span class="pill">programada</span>';
+        return `<tr><td class="num">${fmtHora(r.t)}</td><td class="num">${fmt(r.kg, 1)} kg</td><td class="num">${r.od == null ? '--' : fmt(r.od, 1) + ' mg/L'}</td><td>${sit}</td></tr>`;
+      }).join('');
+      $('#rac-calib').textContent = `Peso médio estimado ${fmt(p.W, 0)} g · água prevista ${fmt(p.TwMedio, 1)} °C · modelo de crescimento calibrado com α = ${fmt(g.calib.alfa, 2)} (${g.calib.n} biometrias${g.calib.rmse != null ? `, erro ${fmt(g.calib.rmse, 1)} g` : ''})`;
+    }
+
+    // temperatura
+    const sT = h24.map(x => ({ t: x.t, v: x.Tw })), sA = h24.map(x => ({ t: x.t, v: x.Ta }));
+    const prT = prev ? prev.pts.map(q => ({ t: q.t, v: q.Tw })) : [];
+    const todosT = [...sT, ...sA, ...prT].map(q => q.v);
+    const ty0 = Math.floor(Math.min(14, ...todosT) - 1), ty1 = Math.ceil(Math.max(33, ...todosT) + 1);
+    grafico($('#g-temp'), { x0, x1, y0: ty0, y1: ty1, agora: t, ticksX: ticksHoras(x0, x1, 6), faixasY: faixasDeZona('temp'),
+      series: [{ pts: sA, cor: cor('ar'), larg: 1.5, gap: 40 * MIN }, { pts: sT, cor: cor('accent'), larg: 2.2, ponta: true, gap: 40 * MIN }, { pts: prT, cor: cor('accent'), tracejado: true, larg: 1.6 }] });
+
+    // pH e amônia, com as zonas da espécie
+    const sPH = h24.map(x => ({ t: x.t, v: x.pH })), sN = h24.map(x => ({ t: x.t, v: x.TAN * fracNH3(x.Tw, x.pH) }));
+    const phv = sPH.map(q => q.v);
+    grafico($('#g-ph'), { x0, x1: t + 2 * H, y0: Math.min(4.5, Math.floor(Math.min(...phv, 9))), y1: Math.max(10, Math.ceil(Math.max(...phv, 5))), agora: t, ticksX: ticksHoras(x0, t, 6), faixasY: faixasDeZona('ph'),
+      series: [{ pts: sPH, cor: cor('accent'), larg: 2.2, ponta: true, gap: 40 * MIN }] });
+    const nMax = Math.max(0.2, ...sN.map(q => q.v)) * 1.1;
+    grafico($('#g-nh3'), { x0, x1: t + 2 * H, y0: 0, y1: Math.ceil(nMax * 20) / 20, agora: t, ticksX: ticksHoras(x0, t, 6), faixasY: faixasDeZona('nh3'), casas: 2,
+      series: [{ pts: sN, cor: cor('accent'), larg: 2.2, ponta: true, gap: 40 * MIN }] });
+
+    // crescimento
+    if (g.biometrias.length) {
+      const b0 = g.biometrias[0], amb = ambienteEm(g.hist, g.diario);
+      const ajuste = []; let W = b0.W;
+      for (let tt = b0.t; tt <= t; tt += DIA) { ajuste.push({ t: tt, v: W }); W = simularPeso(W, tt, Math.min(t, tt + DIA), amb, g.refeicoes, g.N, g.calib.alfa); }
+      ajuste.push({ t, v: peso });
+      const desvio = (a.temperatura ?? 26) - NORMAIS.tmed[mesDe(t)];
+      const proj = projetarCrescimento(peso, t, g.calib.alfa, desvio, 800, 300);
+      const fim = proj.abate ? proj.abate.t + 5 * DIA : t + 120 * DIA;
+      const ys = [...g.biometrias.map(b => b.W), ...proj.pts.map(q => q.W)];
+      const cx0 = b0.t - 2 * DIA;
+      grafico($('#g-cresc'), { x0: cx0, x1: fim, y0: 0, y1: Math.ceil((Math.max(850, ...ys)) / 100) * 100, agora: t,
+        ticksX: X => { const out = []; const d = new Date(cx0); let tt = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); while (tt < fim) { out.push({ x: X(tt), r: MESES[mesDe(tt)] }); tt = Date.UTC(new Date(tt).getUTCFullYear(), new Date(tt).getUTCMonth() + 1, 1); } return out; },
+        limites: [{ y: 800, cor: cor('ink-3'), r: 'peso de abate escolhido: 800 g', dir: 1 }],
+        series: [{ pts: ajuste, cor: cor('racao'), larg: 2 }, { pts: proj.pts.map(q => ({ t: q.t, v: q.W })), cor: cor('racao'), tracejado: true, larg: 1.8 }, { pts: g.biometrias.map(b => ({ t: b.t, v: b.W })), cor: cor('ink'), pontos: true }] });
+      $('#cr-abate').textContent = proj.abate ? `${fmtData(proj.abate.t)} · em ${Math.round((proj.abate.t - t) / DIA)} dias` : 'acima de 300 dias';
+      $('#cr-ganho').textContent = g.biometrias.length > 1 ? `${fmt((g.biometrias[g.biometrias.length - 1].W - g.biometrias[g.biometrias.length - 2].W) / ((g.biometrias[g.biometrias.length - 1].t - g.biometrias[g.biometrias.length - 2].t) / DIA), 1)} g/dia` : '--';
+      $('#cr-alfa').textContent = fmt(g.calib.alfa, 2);
+    }
+
+    // alertas e ações
+    $('#alertas').innerHTML = g.alertas.length ? g.alertas.map(x => `<li class="alerta ${x.nivel}"><i class="marcador"></i><b>${esc(x.titulo)}</b><span>${esc(x.texto)}</span></li>`).join('') : '<li class="vazio">Nenhum alerta ativo. Todas as variáveis dentro das faixas de referência.</li>';
+    $('#n-alertas').textContent = g.alertas.length ? `${g.alertas.length} ativo${g.alertas.length > 1 ? 's' : ''}` : 'tudo certo';
+    $('#n-alertas').className = 'pill ' + (g.alertas.some(x => x.nivel === 'critico') ? 'crit' : g.alertas.length ? 'warn' : 'ok');
+    $('#acoes').innerHTML = g.acoes.slice(0, 14).map(x => `<li><time>${fmtHora(x.t)}</time><span>${esc(x.txt)}</span></li>`).join('') || '<li class="sutil">O gêmeo ainda não agiu nesta sessão.</li>';
+  }
+}
+function tendencia(h, k, d, un) {
+  if (h.length < 7) return '';
+  const v = (h[h.length - 1][k] - h[h.length - 7][k]);
+  return (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + fmt(Math.abs(v), d) + ' ' + un;
+}
+
+/* ---------------- aba do simulador ---------------- */
+function iniciarSimulador() {
+  const bus = new Barramento();
+  let motor = null, ultimoContatoPainel = 0;
+  const raiz = $('#controles');
+  const aoMudar = (acao, arg) => {
+    if (acao === 'reiniciar') { motor = new Motor(new Simulador(arg), motor.vel); bus.enviar(motor.sync()); }
+    atualizarControles(raiz, motor); atualizarTopo();
+  };
+  function comecar(sim, vel) {
+    motor = new Motor(sim, vel);
+    montarControles(raiz, () => motor, aoMudar);
+    bus.enviar(motor.sync());
+    setInterval(() => { motor.avancar(0.25); const m = motor.mensagem(); bus.enviar(m); bus.espelhar(m.leituras, m.t); atualizarControles(raiz, motor); atualizarTopo(); }, 250);
+  }
+  function atualizarTopo() {
+    const s = motor.sim;
+    $('#hora').textContent = fmtHora(s.t); $('#data').textContent = fmtData(s.t) + ' · ' + CENARIOS[s.cenario].nome;
+    const painelOk = Date.now() - ultimoContatoPainel < 4000;
+    $('#chip-painel').className = 'chip ' + (painelOk ? 'ok' : 'warn'); $('#chip-painel').textContent = painelOk ? 'Painel conectado' : 'Painel não aberto';
+    $('#chip-net').className = 'chip ' + (s.ctl.internet ? 'ok' : 'crit'); $('#chip-net').textContent = s.ctl.internet ? 'Internet ok' : 'Sem internet';
+    $('#chip-vel').textContent = motor.pausado ? 'Pausado' : (VELOCIDADES.find(v => v[0] === motor.vel) || [0, ''])[1];
+  }
+  bus.on(m => {
+    if (m.tipo === 'snapshot' && !motor) { clearTimeout(espera); comecar(Simulador.restaurar(m.estado), m.vel); }
+    else if (!motor) return;
+    else if (m.tipo === 'pedir-sync') { bus.enviar({ ...motor.sync(), para: m.de }); if (!m.previsao) ultimoContatoPainel = Date.now(); }
+    else if (m.tipo === 'pedir-previsao') bus.enviar({ tipo: 'previsao', para: m.de, t: motor.sim.t, cenario: motor.sim.cenario, dias: motor.sim.previsaoClima(7) });
+    else if (m.tipo === 'comando') { ultimoContatoPainel = Date.now(); motor.comando(m.topico, m.valor); }
+  });
+  window.addEventListener('beforeunload', () => bus.enviar({ tipo: 'tchau' }));
+  let espera = null;
+  bus.pronto.then(() => { bus.enviar({ tipo: 'quem-simula?' }); espera = setTimeout(() => { if (!motor) comecar(new Simulador('verao'), 5); }, 900); atualizarRede(); });
+  bus.aoMudarRede = () => atualizarRede();
+  function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : 'crit'); ch.textContent = bus.mqttOk ? bus.descricaoRede() + ' conectado' : bus.descricaoRede() + ': sem conexão'; }
+}
+
+/* ---------------- aba Previsão de 7 dias ---------------- */
+const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast?latitude=-16.68&longitude=-49.25&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,shortwave_radiation_sum,wind_speed_10m_max&timezone=America%2FSao_Paulo&forecast_days=7&wind_speed_unit=ms';
+const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const refsTxt = ks => `<span class="ref">(${esc(citar(ks))})</span>`;
+async function buscarOpenMeteo() {
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(OPEN_METEO, { signal: ctl.signal }); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(), d = j.daily;
+    return d.time.map((dia, i) => { const [y, mo, da] = dia.split('-').map(Number);
+      return { t: Date.UTC(y, mo - 1, da), tmax: d.temperature_2m_max[i], tmin: d.temperature_2m_min[i], chuva: d.precipitation_sum[i] ?? 0, rad: d.shortwave_radiation_sum[i], vento: d.wind_speed_10m_max[i] }; })
+      .filter(x => x.tmax != null && x.tmin != null && x.rad != null);
+  } finally { clearTimeout(to); }
+}
+function iniciarPrevisao(ctx = null) {   // ctx: aba embutida no painel ({ bus, gemeo, simDireto, visivel })
+  const bus = ctx ? ctx.bus : new Barramento();
+  const gemeo = ctx ? ctx.gemeo : new Gemeo(() => {});
+  const st = { fonte: 'real', dias: null, origemSim: ctx ? 'aba' : null, local: null, diaSim: null, iniciado: false, falhaReal: null, sincronizado: !!ctx };
+  window.__pv = st; window.__gemeoPv = gemeo;
+  document.querySelectorAll('.fonte-zona[data-zona]').forEach(el => { const z = ZONAS[el.dataset.zona]; el.innerHTML = `<b>Zonas para a tilápia-do-nilo:</b> ${z.faixas.map(f => `${f.r} ${faixaTexto(f, z.unid)}`).join(' · ')}. Fontes: ${z.fonte}.`; });
+
+  function viveiroLocal() {   // nenhuma aba do viveiro aberta: roda um viveiro simulado só nesta página
+    const sim = new Simulador('verao'), motor = new Motor(sim);
+    gemeo.sincronizar(motor.sync()); motor.avancar(0.01); gemeo.receber(motor.mensagem());
+    st.local = sim; st.sincronizado = true; st.origemSim = 'local';
+  }
+  bus.on(m => {
+    if (m.para && m.para !== bus.id) return;
+    if (ctx && m.tipo !== 'previsao') return;
+    if (m.tipo === 'sync') { gemeo.sincronizar(m); st.sincronizado = true; st.origemSim = 'aba'; }
+    else if ((m.tipo === 'tick' || m.tipo === 'tick-espelho') && !m.offline && st.sincronizado && st.origemSim === 'aba') {
+      gemeo.receber(m);
+      const d = Math.floor(m.t / DIA);
+      if (st.fonte === 'sim' && st.diaSim != null && d !== st.diaSim) bus.enviar({ tipo: 'pedir-previsao' });
+    }
+    else if (m.tipo === 'previsao' && m.para === bus.id && st.fonte === 'sim') { st.dias = m.dias; st.diaSim = Math.floor(m.t / DIA); st.origemSim = 'aba'; desenhar(); }
+  });
+  function pedirSim() {
+    st.dias = null;
+    if (st.origemSim === 'local') { st.dias = st.local.previsaoClima(7); desenhar(); return; }
+    const direto = ctx && ctx.simDireto();
+    if (direto) { st.dias = direto; st.origemSim = 'aba'; st.diaSim = Math.floor(gemeo.t / DIA); desenhar(); return; }
+    bus.enviar({ tipo: 'pedir-previsao' });
+    setTimeout(() => { if (st.fonte === 'sim' && !st.dias) { if (!st.local) viveiroLocal(); st.origemSim = 'local'; st.dias = st.local.previsaoClima(7); desenhar(); } }, 1000);
+  }
+  async function usarReal() {
+    st.fonte = 'real'; st.dias = null; marcarBotoes(); desenhar();
+    try { st.dias = await buscarOpenMeteo(); st.falhaReal = null; if (st.dias.length < 2) throw new Error('resposta incompleta'); }
+    catch (e) { st.falhaReal = e.name === 'AbortError' ? 'tempo esgotado' : (e.message || 'bloqueado'); st.fonte = 'sim'; marcarBotoes(); pedirSim(); return; }
+    desenhar();
+  }
+  function marcarBotoes() { $('#pv-real').classList.toggle('ativo', st.fonte === 'real'); $('#pv-sim').classList.toggle('ativo', st.fonte === 'sim'); }
+  $('#pv-real').onclick = () => usarReal();
+  $('#pv-sim').onclick = () => { st.fonte = 'sim'; st.falhaReal = null; marcarBotoes(); pedirSim(); };
+
+  function estado() {
+    const a = gemeo.atual; let theta = null;
+    try { if (gemeo.hist.length > 20) theta = preverOD(gemeo.hist, 1).ajuste.theta; } catch (_) {}
+    return { W: gemeo.pesoEstimado(), N: gemeo.N || 4000, alfa: gemeo.calib.alfa || 1, theta,
+      Tw0: st.fonte === 'sim' ? a.temperatura : null, OD0: st.fonte === 'sim' ? a.od : null };
+  }
+  function desenhar() {
+    if (ctx && !ctx.visivel()) return;
+    marcarBotoes();
+    const real = st.fonte === 'real';
+    $('#pv-chip-fonte').textContent = !st.dias ? 'Carregando previsão' : real ? 'Previsão real · Open-Meteo' : st.origemSim === 'aba' ? 'Clima simulado · da simulação aberta' : 'Clima simulado · viveiro desta página';
+    $('#pv-chip-fonte').className = 'chip ' + (st.dias ? (real ? 'ok' : 'neutro') : 'neutro');
+    const av = $('#pv-aviso');
+    av.hidden = !st.falhaReal;
+    if (st.falhaReal) $('#pv-aviso-txt').textContent = `Não foi possível buscar a previsão real (${st.falhaReal}). Isso acontece sem internet ou quando a página roda num ambiente que bloqueia sites externos; aberto pelos arquivos locais do site, com internet, ele busca normalmente. Mostrando o clima simulado.`;
+    if (!st.dias) return;
+    if (!st.sincronizado) { setTimeout(desenhar, 400); return; }
+    const est = estado();
+    $('#pv-chip-lote').textContent = `Lote: ${fmt(est.W, 0)} g · ${(est.N).toLocaleString('pt-BR')} peixes · α ${fmt(est.alfa, 2)}`;
+    const r = consequenciasSemana(st.dias, est);
+    const nivelDia = d => d.flags.some(f => f.nivel === 'critico') ? 'critico' : d.flags.some(f => f.nivel === 'atencao') ? 'atencao' : 'ok';
+    // cartões dos dias
+    $('#pv-dias').innerHTML = r.dias.map(d => {
+      const z = faixaZona('temp', d.TwMed);
+      return `<div class="dia" data-estado="${nivelDia(d)}"><span class="nome">${DIAS_SEMANA[new Date(d.t).getUTCDay()]}<small>${fmtDiaMes(d.t)}</small></span>
+        <span class="temps">${fmt(d.tmax, 0)}°<small> / ${fmt(d.tmin, 0)}°</small></span>
+        <span class="det"><span>chuva ${fmt(d.chuva, 1)} mm</span><span>sol ${fmt(d.rad, 1)} MJ/m² (${Math.round(d.fRad * 100)}%)</span><span>vento até ${fmt(d.vento, 1)} m/s</span></span>
+        <span class="agua">água ≈ ${fmt(d.TwMed, 1)} °C · <span style="color:var(--${z.nivel === 'ideal' ? 'ok' : z.nivel === 'atencao' ? 'warn' : 'crit'})">${z.r}</span></span></div>`;
+    }).join('');
+    // gráficos
+    const H0 = r.horas, x0 = H0[0].t, x1 = H0[H0.length - 1].t;
+    const ticks = X => r.dias.map(d => ({ x: X(d.t + 12 * H), r: `${DIAS_SEMANA[new Date(d.t).getUTCDay()]} ${fmtDiaMes(d.t)}` }));
+    const sep = r.dias.slice(1).map(d => ({ t0: d.t, t1: d.t + 6 * MIN, cor: cor('line'), alfa: 1 }));
+    const vals = H0.flatMap(h => [h.Ta, h.Tw]);
+    grafico($('#pv-g-temp'), { x0, x1, y0: Math.floor(Math.min(14, ...vals) - 1), y1: Math.ceil(Math.max(34, ...vals) + 1), ticksX: ticks, faixasX: sep, faixasY: faixasDeZona('temp'),
+      series: [{ pts: H0.map(h => ({ t: h.t, v: h.Ta })), cor: cor('ar'), larg: 1.4 }, { pts: H0.map(h => ({ t: h.t, v: h.Tw })), cor: cor('accent'), larg: 2.4 }] });
+    const aerF = []; let ini = null;
+    for (const h of H0) { if (h.aer && ini == null) ini = h.t; if (!h.aer && ini != null) { aerF.push({ t0: ini, t1: h.t, cor: cor('accent'), alfa: 0.13 }); ini = null; } }
+    if (ini != null) aerF.push({ t0: ini, t1: x1, cor: cor('accent'), alfa: 0.13 });
+    const odMax = Math.max(10, ...H0.map(h => Math.max(h.od, h.odSem))) + 0.5;
+    grafico($('#pv-g-od'), { x0, x1, y0: 0, y1: Math.ceil(odMax), ticksX: ticks, faixasX: [...sep, ...aerF], faixasY: faixasDeZona('od'),
+      limites: [{ y: 4, cor: cor('ink-2'), r: 'aerar abaixo de 4 mg/L (Francis-Floyd, 2003)' }],
+      series: [{ pts: H0.map(h => ({ t: h.t, v: h.odSem })), cor: cor('crit'), tracejado: true, larg: 1.8 }, { pts: H0.map(h => ({ t: h.t, v: h.od })), cor: cor('accent'), larg: 2.2 }] });
+    // tabela
+    $('#pv-tab').innerHTML = r.dias.map(d => {
+      const zo = d.semAer ? faixaZona('od', d.semAer.od) : null;
+      const itens = d.flags.length ? d.flags.map(f => `<li class="${f.nivel}">${esc(f.txt)} ${refsTxt(f.refs)}${f.limiar ? ' <span class="limiar">limiar do protótipo</span>' : ''}</li>`).join('') : `<li>Água e oxigênio dentro das faixas ideais. Ração normal da tabela ${refsTxt(['senar2019'])}</li>`;
+      return `<tr><td><b>${DIAS_SEMANA[new Date(d.t).getUTCDay()]}</b> ${fmtDiaMes(d.t)}</td>
+        <td class="num">${fmt(d.twMin, 1)}–${fmt(d.twMax, 1)} °C</td>
+        <td class="num">${d.semAer ? `${fmt(d.semAer.od, 1)} mg/L <span class="pill ${zo.nivel === 'ideal' ? 'ok' : zo.nivel === 'atencao' ? 'warn' : 'crit'}">${zo.r}</span>` : '--'}</td>
+        <td class="num">${fmt(d.hAer, 1)} h</td>
+        <td class="num">${fmt(d.racao, 1)} kg${d.suspensas ? `<br><span class="sutil" style="font-size:.76rem">${d.suspensas} refeição(ões) suspensa(s)</span>` : ''}</td>
+        <td><ul>${itens}</ul></td></tr>`;
+    }).join('');
+    // resumo
+    const soma = k => r.dias.reduce((s, d) => s + d[k], 0);
+    const racao = soma('racao'), base = soma('base'), hAer = soma('hAer'), ganhoKg = r.dias.reduce((s, d) => s + d.ganho * est.N / 1000, 0);
+    const Wfim = r.dias[r.dias.length - 1].W + r.dias[r.dias.length - 1].ganho;
+    const crit = r.dias.filter(d => nivelDia(d) === 'critico').length, aten = r.dias.filter(d => nivelDia(d) === 'atencao').length;
+    const piorOD = r.dias.filter(d => d.semAer).reduce((p, d) => !p || d.semAer.od < p.semAer.od ? d : p, null);
+    $('#pv-resumo').innerHTML = `
+      <div class="kv"><span class="rotulo">Ração prevista na semana</span><b>${fmt(racao, 0)} kg</b><span class="sutil" style="font-size:.8rem">tabela sem ajuste: ${fmt(base, 0)} kg ${refsTxt(['senar2019'])}</span></div>
+      <div class="kv"><span class="rotulo">Aerador</span><b>${fmt(hAer, 0)} h · ${fmt(hAer * POTENCIA_AERADOR_KW, 0)} kWh</b><span class="sutil" style="font-size:.8rem">regra: ligar abaixo de 4 mg/L, desligar com 5 mg/L e sol ${refsTxt(['francis2003', 'tucker2005'])}</span></div>
+      <div class="kv"><span class="rotulo">Noite mais arriscada sem aeração</span><b>${piorOD ? `${DIAS_SEMANA[new Date(piorOD.t).getUTCDay()]} ${fmtDiaMes(piorOD.t)} · ${fmt(piorOD.semAer.od, 1)} mg/L` : '--'}</b></div>
+      <div class="kv"><span class="rotulo">Crescimento esperado</span><b>${fmt(est.W, 0)} → ${fmt(Wfim, 0)} g</b><span class="sutil" style="font-size:.8rem">≈ ${fmt(ganhoKg, 0)} kg de biomassa ${refsTxt(['yi1998', 'dampin2012'])}</span></div>
+      <div class="kv"><span class="rotulo">Dias com alerta</span><b>${crit} crítico${crit === 1 ? '' : 's'} · ${aten} de atenção</b></div>`;
+    $('#pv-metodo').innerHTML = `Como é calculado: a água segue a média do ar ${refsTxt(['rotta2023'])}; o OD vem do balanço de oxigênio ${refsTxt(['boyd1978', 'romaire1979'])} com os parâmetros que o gêmeo ajustou nas últimas 24 h${est.theta ? '' : ' (sem dados ainda: valores iniciais)'} e a radiação prevista; a ração usa a tabela e o fator de temperatura ${refsTxt(['senar2019'])} limitados ao apetite do modelo de Yi; o lote vem das biometrias do viveiro.`;
+  }
+  window.addEventListener('resize', () => st.dias && desenhar());
+  const api = {
+    abrir() { if (!st.iniciado) { st.iniciado = true; usarReal(); } else desenhar(); },
+    tick(t) { const d = Math.floor(t / DIA); if (st.iniciado && st.fonte === 'sim' && st.diaSim != null && d !== st.diaSim) { st.diaSim = d; pedirSim(); } },
+  };
+  if (!ctx) { bus.pronto.then(() => { bus.enviar({ tipo: 'pedir-sync', previsao: true }); setTimeout(() => { if (!st.sincronizado) viveiroLocal(); }, 1000); }); api.abrir(); }
+  return api;
+}
+
+/* ---------------- aba Fontes ---------------- */
+function iniciarFontes() {
+  const nivelPill = { ideal: 'ok', atencao: 'warn', critico: 'crit', morte: 'crit' };
+  $('#ft-zonas').innerHTML = Object.values(ZONAS).map(z => z.faixas.map((f, i) => `<tr>${i === 0 ? `<td rowspan="${z.faixas.length}"><b>${esc(z.nome)}</b></td>` : ''}<td><span class="pill ${nivelPill[f.nivel]}">${f.r}</span></td><td class="num">${faixaTexto(f, z.unid)}</td><td>${esc(f.base)}</td></tr>`).join('')).join('');
+  $('#ft-leg').innerHTML = Object.entries(STATUS_FONTE).map(([k, [c, r]]) => `<span><span class="pill ${c}">${r}</span> ${{ especie: 'literatura sobre a tilápia', geral: 'literatura geral (peixes de água quente, viveiros, química)', derivado: 'calculado de valores com fonte', sem: 'escolha ou calibração do protótipo' }[k]}</span>`).join('');
+  $('#ft-itens').innerHTML = ITENS_FONTES.map(([item, uso, refs, stt]) => `<tr><td>${esc(item)}</td><td class="sutil">${esc(uso)}</td><td>${refs.length ? esc(citar(refs)) : stt === 'sem' ? '<span class="sutil">sem fonte</span>' : '<span class="sutil">fórmula padrão</span>'}</td><td><span class="pill ${STATUS_FONTE[stt][0]}">${STATUS_FONTE[stt][1]}</span></td></tr>`).join('');
+  const conta = k => ITENS_FONTES.filter(x => x[3] === k).length;
+  $('#ft-conta').textContent = `${ITENS_FONTES.length} itens: ${conta('especie')} com fonte sobre a tilápia, ${conta('geral')} com fonte geral, ${conta('derivado')} derivados e ${conta('sem')} sem fonte (escolhas da simulação, marcadas como tal).`;
+  $('#ft-refs').innerHTML = Object.values(REFS).sort((a, b) => a.t.localeCompare(b.t, 'pt')).map(r => `<li>${esc(r.t)}${r.doi ? ` DOI: <a href="https://doi.org/${encodeURI(r.doi)}" target="_blank" rel="noopener">${esc(r.doi)}</a>.` : ''}${r.url ? ` <a href="${r.url}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ''}${r.esp ? ' <span class="pill ok">Tilápia</span>' : ''}</li>`).join('');
+}
+
+/* ---------------- tema claro / escuro (lembrado neste navegador) ---------------- */
+function aplicarTema(t) { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+try { aplicarTema(localStorage.getItem('gemeo-tema')); } catch (_) {}
+function ligarBotaoTema() {
+  const b = document.getElementById('bt-tema'); if (!b) return;
+  b.onclick = () => {
+    const atual = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const novo = atual === 'dark' ? 'light' : 'dark'; aplicarTema(novo);
+    try { localStorage.setItem('gemeo-tema', novo); } catch (_) {}
+    window.dispatchEvent(new Event('resize'));   // redesenha os gráficos com as cores novas
+  };
+}
+
+/* ---------------- início ---------------- */
+document.addEventListener('DOMContentLoaded', () => {
+  ligarBotaoTema();
+  const modo = window.MODO_GEMEO || (location.hash === '#simulador' ? 'simulador' : 'painel');
+  if (modo === 'simulador') iniciarSimulador(); else if (modo === 'previsao') iniciarPrevisao(); else if (modo === 'fontes') iniciarFontes(); else iniciarPainel();
+});
+
+</script>
+</body>
+</html>

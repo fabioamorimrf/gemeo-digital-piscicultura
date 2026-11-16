@@ -1,0 +1,18 @@
+<div class="wrap">
+  <header class="topo">
+    <div class="linha-abas"><nav class="abas" aria-label="Páginas do protótipo"><a href="index.html">Painel</a><a href="previsao.html">Previsão 7 dias</a><a href="simulador.html" aria-current="page">Simulador</a><a href="fontes.html">Fontes</a></nav><button class="bt-tema" id="bt-tema" type="button" aria-label="Alternar tema claro e escuro" title="Tema claro / escuro"><span class="ic-sol"><i class="ic" data-ic="sun"></i></span><span class="ic-lua"><i class="ic" data-ic="moon"></i></span></button></div>
+    <div class="marca">
+      <h1>Simulador <span>· Viveiro 1</span></h1>
+      <p>A contraparte física virtual: aqui você muda o que os sensores do ESP32 mediriam</p>
+    </div>
+    <div class="relogio"><span class="hora" id="hora">--:--</span><span class="data" id="data">iniciando</span></div>
+    <div class="chips">
+      <span class="chip" id="chip-painel">Painel</span>
+      <span class="chip" id="chip-net">Internet</span>
+      <span class="chip neutro" id="chip-vel"></span>
+      <span class="chip" id="chip-rede" hidden></span>
+    </div>
+    <div class="acoes-topo"><a class="btn" href="index.html">Abrir o painel</a></div>
+  </header>
+  <div class="controles" id="controles"></div>
+</div>
