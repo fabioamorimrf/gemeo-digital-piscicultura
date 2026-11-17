@@ -258,7 +258,7 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .mc-config input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: .9rem; }
 .mc-config details { display: grid; gap: 8px; font-size: .85rem; } .mc-config summary { cursor: pointer; color: var(--ink-2); }
 .mc-config details[open] label { margin-top: 8px; }
-#mc-estado { justify-self: center; }
+
 
 /* clima de referência (INMET) na aba Previsão */
 .clima-ref { width: 100%; border-collapse: collapse; font-size: .84rem; }
@@ -269,3 +269,17 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .pv-comparacao { margin: 0 0 .7rem; font-size: .88rem; line-height: 1.5; }
 
 .espera-painel p { margin: 0 0 .8rem; color: var(--ink-2); line-height: 1.5; }
+
+/* janela do celular: nada pode alargar a caixa */
+.modal-caixa > *, .mc-config > * { min-width: 0; }
+.modal-caixa { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.mc-status { border-radius: 10px; padding: 10px 12px; font-size: .84rem; background: var(--surface-2); display: grid; gap: 6px; overflow-wrap: anywhere; }
+.mc-status[data-estado="ok"] { background: var(--ok-soft); } .mc-status[data-estado="ok"] > b { color: var(--ok); }
+.mc-status[data-estado="warn"] > b { color: var(--warn); }
+.mc-status[data-estado="crit"] { background: var(--crit-soft); } .mc-status[data-estado="crit"] > b { color: var(--crit); }
+.mc-status ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; }
+.mc-status li { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.mc-status li span { margin-left: auto; font-size: .76rem; }
+.mc-status li i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.mc-status li[data-ok="1"] i { background: var(--ok); } .mc-status li[data-ok="0"] i { background: var(--crit); }
+.mc-dica { margin: 2px 0 0; color: var(--ink); line-height: 1.45; }

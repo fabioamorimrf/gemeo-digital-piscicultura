@@ -95,12 +95,14 @@ class Barramento {
         });
         c.on('error', e => { k.erro = (e && e.message) || 'erro'; atualizar(); });
         c.on('offline', () => { k.ok = false; atualizar(); });
-        c.on('close', () => { if (k.ok) { k.ok = false; atualizar(); } });
+        c.on('close', () => { if (k.ok) { k.ok = false; atualizar(); } else if (!k.erro) { k.erro = 'conexão recusada'; atualizar(); } });
+        setTimeout(() => { if (!k.ok && !k.erro && this.clientes.includes(k)) { k.erro = 'sem resposta'; atualizar(); } }, 16000);
         c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
       }
     });
   }
   brokersOk() { return this.clientes.filter(k => k.ok).map(k => k.nome); }
+  todosFalharam() { return !this.mqttOk && this.clientes.length > 0 && this.clientes.every(k => k.erro); }
   descricaoRede() { return !this.modoRede ? '' : this.modoRede === 'local' ? 'MQTT local' : `MQTT · sala ${this.cfg.sala}`; }
   textoBrokers() { const ok = this.brokersOk(); return ok.length ? ` (${ok.join(', ')})` : ''; }
   linkCelular() {
@@ -130,6 +132,15 @@ class Barramento {
     this.vistos.add(m.mid); if (this.vistos.size > 400) this.vistos = new Set([...this.vistos].slice(-200));
     for (const f of this.ouvintes) f(m);
   }
+}
+
+// quadro de status da conexão na janela do celular: uma linha por broker e, se nenhum responder, o que fazer
+function statusRede(bus) {
+  if (!bus.modoRede) return '';
+  const titulo = bus.mqttOk ? `Conectado · sala ${esc(bus.cfg ? bus.cfg.sala : 'local')}` : bus.todosFalharam() ? 'Nenhum broker respondeu' : 'Conectando...';
+  const itens = bus.clientes.map(k => `<li data-ok="${k.ok ? 1 : k.erro ? 0 : ''}"><i></i>${esc(k.nome)}<span>${k.ok ? 'conectado' : k.erro ? 'sem resposta' : 'tentando'}</span></li>`).join('');
+  const dica = bus.todosFalharam() ? `<p class="mc-dica">A rede deste computador parece bloquear a conexão com os brokers (todos deram "${esc(bus.clientes[0].erro)}"). Ligue o computador no roteador do celular (dados móveis 4G) ou em outra rede e clique em <b>Desconectar e trocar de sala</b>. O site continua tentando sozinho.</p>` : '';
+  return `<b>${titulo}</b>${itens ? `<ul>${itens}</ul>` : ''}${dica}`;
 }
 
 /* ---------------- motor: roda o simulador e monta as mensagens do ESP32 ---------------- */
@@ -517,8 +528,8 @@ function iniciarPainel() {
     const hospedado = /^https?:$/.test(location.protocol);
     $('#mc-config').hidden = !!bus.modoRede || !hospedado; $('#mc-conectado').hidden = !bus.modoRede;
     $('#mc-arquivo').hidden = hospedado || !!bus.modoRede;
-    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}${bus.textoBrokers()}` : bus.erroRede ? `Ainda sem conexão (${bus.erroRede}). Tentando de novo... Se nenhum conectar, a rede deste computador pode estar bloqueando: ligue o computador no roteador do celular (dados móveis) e tente outra vez.` : 'Conectando aos brokers...';
-    $('#mc-estado').className = 'pill ' + (bus.mqttOk ? 'ok' : bus.modoRede ? 'warn' : '');
+    $('#mc-estado').innerHTML = statusRede(bus);
+    $('#mc-estado').dataset.estado = bus.mqttOk ? 'ok' : bus.todosFalharam() ? 'crit' : 'warn';
     $('#bt-mc-desligar').hidden = bus.modoRede !== 'nuvem';
     if (!bus.modoRede) return;
     const url = bus.linkCelular();

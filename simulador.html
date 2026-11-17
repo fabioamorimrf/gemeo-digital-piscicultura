@@ -267,7 +267,7 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .mc-config input { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: .9rem; }
 .mc-config details { display: grid; gap: 8px; font-size: .85rem; } .mc-config summary { cursor: pointer; color: var(--ink-2); }
 .mc-config details[open] label { margin-top: 8px; }
-#mc-estado { justify-self: center; }
+
 
 /* clima de referência (INMET) na aba Previsão */
 .clima-ref { width: 100%; border-collapse: collapse; font-size: .84rem; }
@@ -278,6 +278,20 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
 .pv-comparacao { margin: 0 0 .7rem; font-size: .88rem; line-height: 1.5; }
 
 .espera-painel p { margin: 0 0 .8rem; color: var(--ink-2); line-height: 1.5; }
+
+/* janela do celular: nada pode alargar a caixa */
+.modal-caixa > *, .mc-config > * { min-width: 0; }
+.modal-caixa { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.mc-status { border-radius: 10px; padding: 10px 12px; font-size: .84rem; background: var(--surface-2); display: grid; gap: 6px; overflow-wrap: anywhere; }
+.mc-status[data-estado="ok"] { background: var(--ok-soft); } .mc-status[data-estado="ok"] > b { color: var(--ok); }
+.mc-status[data-estado="warn"] > b { color: var(--warn); }
+.mc-status[data-estado="crit"] { background: var(--crit-soft); } .mc-status[data-estado="crit"] > b { color: var(--crit); }
+.mc-status ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; }
+.mc-status li { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.mc-status li span { margin-left: auto; font-size: .76rem; }
+.mc-status li i { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.mc-status li[data-ok="1"] i { background: var(--ok); } .mc-status li[data-ok="0"] i { background: var(--crit); }
+.mc-dica { margin: 2px 0 0; color: var(--ink); line-height: 1.45; }
 
 </style>
 </head>
@@ -1457,12 +1471,14 @@ class Barramento {
         });
         c.on('error', e => { k.erro = (e && e.message) || 'erro'; atualizar(); });
         c.on('offline', () => { k.ok = false; atualizar(); });
-        c.on('close', () => { if (k.ok) { k.ok = false; atualizar(); } });
+        c.on('close', () => { if (k.ok) { k.ok = false; atualizar(); } else if (!k.erro) { k.erro = 'conexão recusada'; atualizar(); } });
+        setTimeout(() => { if (!k.ok && !k.erro && this.clientes.includes(k)) { k.erro = 'sem resposta'; atualizar(); } }, 16000);
         c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
       }
     });
   }
   brokersOk() { return this.clientes.filter(k => k.ok).map(k => k.nome); }
+  todosFalharam() { return !this.mqttOk && this.clientes.length > 0 && this.clientes.every(k => k.erro); }
   descricaoRede() { return !this.modoRede ? '' : this.modoRede === 'local' ? 'MQTT local' : `MQTT · sala ${this.cfg.sala}`; }
   textoBrokers() { const ok = this.brokersOk(); return ok.length ? ` (${ok.join(', ')})` : ''; }
   linkCelular() {
@@ -1492,6 +1508,15 @@ class Barramento {
     this.vistos.add(m.mid); if (this.vistos.size > 400) this.vistos = new Set([...this.vistos].slice(-200));
     for (const f of this.ouvintes) f(m);
   }
+}
+
+// quadro de status da conexão na janela do celular: uma linha por broker e, se nenhum responder, o que fazer
+function statusRede(bus) {
+  if (!bus.modoRede) return '';
+  const titulo = bus.mqttOk ? `Conectado · sala ${esc(bus.cfg ? bus.cfg.sala : 'local')}` : bus.todosFalharam() ? 'Nenhum broker respondeu' : 'Conectando...';
+  const itens = bus.clientes.map(k => `<li data-ok="${k.ok ? 1 : k.erro ? 0 : ''}"><i></i>${esc(k.nome)}<span>${k.ok ? 'conectado' : k.erro ? 'sem resposta' : 'tentando'}</span></li>`).join('');
+  const dica = bus.todosFalharam() ? `<p class="mc-dica">A rede deste computador parece bloquear a conexão com os brokers (todos deram "${esc(bus.clientes[0].erro)}"). Ligue o computador no roteador do celular (dados móveis 4G) ou em outra rede e clique em <b>Desconectar e trocar de sala</b>. O site continua tentando sozinho.</p>` : '';
+  return `<b>${titulo}</b>${itens ? `<ul>${itens}</ul>` : ''}${dica}`;
 }
 
 /* ---------------- motor: roda o simulador e monta as mensagens do ESP32 ---------------- */
@@ -1879,8 +1904,8 @@ function iniciarPainel() {
     const hospedado = /^https?:$/.test(location.protocol);
     $('#mc-config').hidden = !!bus.modoRede || !hospedado; $('#mc-conectado').hidden = !bus.modoRede;
     $('#mc-arquivo').hidden = hospedado || !!bus.modoRede;
-    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}${bus.textoBrokers()}` : bus.erroRede ? `Ainda sem conexão (${bus.erroRede}). Tentando de novo... Se nenhum conectar, a rede deste computador pode estar bloqueando: ligue o computador no roteador do celular (dados móveis) e tente outra vez.` : 'Conectando aos brokers...';
-    $('#mc-estado').className = 'pill ' + (bus.mqttOk ? 'ok' : bus.modoRede ? 'warn' : '');
+    $('#mc-estado').innerHTML = statusRede(bus);
+    $('#mc-estado').dataset.estado = bus.mqttOk ? 'ok' : bus.todosFalharam() ? 'crit' : 'warn';
     $('#bt-mc-desligar').hidden = bus.modoRede !== 'nuvem';
     if (!bus.modoRede) return;
     const url = bus.linkCelular();
