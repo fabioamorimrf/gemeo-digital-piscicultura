@@ -84,7 +84,7 @@ Todos os dados do viveiro são simulados. O viveiro "real" usa α = 1,08 de prop
 
 ## Controlar a simulação pelo celular (site hospedado + broker MQTT público)
 
-O computador mostra o painel no projetor e o celular controla a simulação. Os dois trocam mensagens pelo broker MQTT público da HiveMQ (`wss://broker.hivemq.com:8884/mqtt`, sem conta). Cada apresentação usa um código de sala aleatório nos tópicos (`gemeo/viveiro1/<sala>/...`), para ninguém interferir. Os dados são simulados; quem souber o código da sala consegue ver as mensagens.
+O computador mostra o painel no projetor e o celular controla a simulação. Os dois trocam mensagens por brokers MQTT públicos, sem conta. Com o campo do broker em branco (automático), cada aparelho conecta ao mesmo tempo em três: HiveMQ (`wss://broker.hivemq.com:8884/mqtt`), EMQX (`wss://broker.emqx.io:8084/mqtt`) e Mosquitto (`wss://test.mosquitto.org:8081/mqtt`), e publica em todos; as mensagens repetidas são descartadas. Basta um deles funcionar nos dois aparelhos. O HiveMQ público às vezes não responde ("connack timeout"), e por isso existe essa redundância. Cada apresentação usa um código de sala aleatório nos tópicos (`gemeo/viveiro1/<sala>/...`), para ninguém interferir. Os dados são simulados; quem souber o código da sala consegue ver as mensagens.
 
 **Site publicado:** https://fabioamorimrf.github.io/gemeo-digital-piscicultura/ (repositório `fabioamorimrf/gemeo-digital-piscicultura`, GitHub Pages na branch `main`, pasta raiz).
 

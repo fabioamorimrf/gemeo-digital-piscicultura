@@ -483,7 +483,8 @@ table.consequencias li.critico::marker { color: var(--crit); } table.consequenci
     <p class="sutil" id="mc-arquivo" style="margin:0;font-size:.88rem">Para controlar pelo celular, o site precisa estar hospedado (GitHub Pages, por exemplo) ou aberto pelo <span class="mono">servidor.py</span>. Aberto direto do arquivo, o celular não consegue acessar a página.</p>
     <div id="mc-config" class="mc-config">
       <p style="margin:0;font-size:.88rem">O computador e o celular trocam mensagens por um broker MQTT na internet, com um código de sala só desta apresentação.</p>
-      <label>Broker (WebSocket seguro)<input id="mc-broker" class="mono" spellcheck="false"></label>
+      <label>Broker (WebSocket seguro)<input id="mc-broker" class="mono" spellcheck="false" placeholder="automático: HiveMQ, EMQX e Mosquitto"></label>
+      <p class="sutil" style="margin:0;font-size:.78rem">Deixe em branco para usar os três brokers públicos ao mesmo tempo: se um não responder, os outros levam as mensagens.</p>
       <details><summary>Usuário e senha (só se o broker pedir)</summary>
         <label>Usuário<input id="mc-usuario" autocomplete="off"></label>
         <label>Senha<input id="mc-senha" type="password" autocomplete="off"></label>
@@ -1584,6 +1585,15 @@ const cor = nome => getComputedStyle(document.documentElement).getPropertyValue(
 //  - servidor local (servidor.py): broker na própria máquina, tópicos gemeo/viveiro1/...
 //  - broker na internet (padrão: broker público da HiveMQ): tópicos gemeo/viveiro1/<sala>/..., com um código de sala aleatório
 const BROKER_PADRAO = 'wss://broker.hivemq.com:8884/mqtt';
+/* Brokers públicos usados juntos no modo automático: as duas pontas conectam em todos e publicam
+   em todos, e as mensagens repetidas são descartadas pelo id. Basta um broker funcionar dos dois lados.
+   (O HiveMQ público às vezes não responde ao CONNECT: "connack timeout".) */
+const BROKERS_PUBLICOS = [
+  { nome: 'HiveMQ', url: 'wss://broker.hivemq.com:8884/mqtt' },
+  { nome: 'EMQX', url: 'wss://broker.emqx.io:8084/mqtt' },
+  { nome: 'Mosquitto', url: 'wss://test.mosquitto.org:8081/mqtt' },
+];
+const brokerAuto = url => !url || url === 'auto' || url === BROKER_PADRAO;
 function carregarScript(src) { return new Promise((ok, erro) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = erro; document.head.appendChild(s); }); }
 const codificar = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/=+$/, '');
 const decodificar = t => JSON.parse(decodeURIComponent(escape(atob(t))));
@@ -1591,7 +1601,7 @@ const novaSala = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), b =
 class Barramento {
   constructor() {
     this.id = Math.random().toString(36).slice(2); this.vistos = new Set(); this.ouvintes = [];
-    this.mqtt = null; this.mqttOk = false; this.info = null; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO;
+    this.mqtt = null; this.clientes = []; this.mqttOk = false; this.info = null; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO;
     this.fila = []; this.aoMudarRede = () => {}; this.aoConectar = []; this.ultEspelho = 0;
     try { this.bc = new BroadcastChannel('gemeo-viveiro1'); this.bc.onmessage = e => this.chegou(e.data); } catch (e) { this.bc = null; }
     window.addEventListener('storage', e => { if (e.key === 'gemeo-viveiro1' && e.newValue) { try { this.chegou(JSON.parse(e.newValue)); } catch (_) {} } });
@@ -1617,41 +1627,57 @@ class Barramento {
   async usarNuvem(cfg) {
     this.cfg = cfg; this.modoRede = 'nuvem';
     try { localStorage.setItem('gemeo-mqtt', JSON.stringify(cfg)); } catch (_) {}
-    return this.conectar(cfg.url || BROKER_PADRAO, cfg.usuario ? { username: cfg.usuario, password: cfg.senha || '' } : {}, TOPICO + cfg.sala + '/');
+    const alvos = brokerAuto(cfg.url) ? (window.GEMEO_BROKERS_TESTE || BROKERS_PUBLICOS) : [{ nome: cfg.url.replace(/^wss?:\/\//, '').replace(/[:/].*$/, ''), url: cfg.url }];
+    return this.conectar(alvos, cfg.usuario ? { username: cfg.usuario, password: cfg.senha || '' } : {}, TOPICO + cfg.sala + '/');
   }
   desligarNuvem() {
     try { localStorage.removeItem('gemeo-mqtt'); } catch (_) {}
-    if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
-    this.mqtt = null; this.mqttOk = false; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO; this.aoMudarRede();
+    this.encerrarClientes();
+    this.mqttOk = false; this.cfg = null; this.modoRede = null; this.prefixo = TOPICO; this.aoMudarRede();
   }
-  async conectar(url, extra, prefixo) {
+  encerrarClientes() { for (const k of this.clientes) { try { k.c.end(true); } catch (_) {} } this.clientes = []; this.mqtt = null; }
+  // conecta em um ou mais brokers ao mesmo tempo; "pronto" quando o primeiro responde (ou depois de 15 s)
+  async conectar(alvos, extra, prefixo) {
+    if (typeof alvos === 'string') alvos = [{ nome: 'MQTT', url: alvos }];
     if (!window.mqtt) await carregarScript('mqtt.min.js');
-    if (this.mqtt) { try { this.mqtt.end(true); } catch (_) {} }
+    this.encerrarClientes();
     this.prefixo = prefixo; this.mqttOk = false; this.erroRede = null;
-    await new Promise(ok => {
-      const c = window.mqtt.connect(url, { clientId: 'web-' + this.id, reconnectPeriod: 1500, keepalive: 20, connectTimeout: 10000, clean: true, ...extra });
-      this.mqtt = c; const fim = setTimeout(ok, 10000);
-      c.on('connect', () => {
-        this.mqttOk = true; this.erroRede = null;
-        c.subscribe(this.topicoAbas, { qos: 1 }, () => { for (const f of this.aoConectar) { try { f(); } catch (_) {} } });
-        clearTimeout(fim); ok(); this.aoMudarRede();
-      });
-      c.on('reconnect', () => this.aoMudarRede());
-      c.on('error', e => { this.erroRede = e && e.message; this.aoMudarRede(); });
-      c.on('offline', () => { this.mqttOk = false; this.aoMudarRede(); });
-      c.on('close', () => { if (this.mqttOk) { this.mqttOk = false; this.aoMudarRede(); } });
-      c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
+    const atualizar = () => {
+      const ok = this.clientes.filter(k => k.ok);
+      this.mqttOk = ok.length > 0; this.mqtt = ok.length ? ok[0].c : null;
+      const erros = this.clientes.filter(k => !k.ok && k.erro);
+      this.erroRede = this.mqttOk ? null : erros.length ? erros.map(k => `${k.nome}: ${k.erro}`).join('; ') : null;
+      this.aoMudarRede();
+    };
+    await new Promise(pronto => {
+      const fim = setTimeout(pronto, 15000);
+      for (const alvo of alvos) {
+        const k = { nome: alvo.nome, url: alvo.url, ok: false, erro: null };
+        const c = window.mqtt.connect(alvo.url, { clientId: 'gemeo-' + this.id + '-' + Math.random().toString(36).slice(2, 6), protocolVersion: 4, reconnectPeriod: 3000, keepalive: 30, connectTimeout: 15000, clean: true, ...extra });
+        k.c = c; this.clientes.push(k);
+        c.on('connect', () => {
+          k.ok = true; k.erro = null;
+          c.subscribe(this.topicoAbas, { qos: 1 }, () => { for (const f of this.aoConectar) { try { f(); } catch (_) {} } });
+          clearTimeout(fim); pronto(); atualizar();
+        });
+        c.on('error', e => { k.erro = (e && e.message) || 'erro'; atualizar(); });
+        c.on('offline', () => { k.ok = false; atualizar(); });
+        c.on('close', () => { if (k.ok) { k.ok = false; atualizar(); } });
+        c.on('message', (t, pl) => { if (t === this.topicoAbas) { try { this.chegou(JSON.parse(pl.toString())); } catch (_) {} } });
+      }
     });
   }
+  brokersOk() { return this.clientes.filter(k => k.ok).map(k => k.nome); }
   descricaoRede() { return !this.modoRede ? '' : this.modoRede === 'local' ? 'MQTT local' : `MQTT · sala ${this.cfg.sala}`; }
+  textoBrokers() { const ok = this.brokersOk(); return ok.length ? ` (${ok.join(', ')})` : ''; }
   linkCelular() {
     const base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
     if (this.modoRede === 'local') return `http://${this.info.ips[0]}:${this.info.porta}/simulador.html`;
     return this.cfg ? base + 'simulador.html#mqtt=' + codificar(this.cfg) : '';
   }
   // ações do controle remoto vão com QoS 1 (entrega garantida); o resto é estado periódico, QoS 0
-  publicar(m) { try { this.mqtt.publish(this.topicoAbas, JSON.stringify(m), { qos: m.tipo === 'acao' ? 1 : 0 }); } catch (_) {} }
-  textoRede() { return this.mqttOk ? this.descricaoRede() + ' conectado' : this.erroRede ? this.descricaoRede() + ': sem conexão, tentando de novo' : this.descricaoRede() + ': conectando...'; }
+  publicar(m) { const txt = JSON.stringify(m); for (const k of this.clientes) if (k.ok) { try { k.c.publish(this.topicoAbas, txt, { qos: m.tipo === 'acao' ? 1 : 0 }); } catch (_) {} } }
+  textoRede() { return this.mqttOk ? this.descricaoRede() + ' conectado' + this.textoBrokers() : this.erroRede ? this.descricaoRede() + ': sem conexão, tentando de novo' : this.descricaoRede() + ': conectando...'; }
   // espelha as leituras nos tópicos do contrato (…/agua/od etc.), para ver num cliente MQTT
   espelhar(leituras, t) {
     if (!this.mqttOk || !leituras || Date.now() - this.ultEspelho < 1000) return; this.ultEspelho = Date.now();
@@ -2058,7 +2084,7 @@ function iniciarPainel() {
     const hospedado = /^https?:$/.test(location.protocol);
     $('#mc-config').hidden = !!bus.modoRede || !hospedado; $('#mc-conectado').hidden = !bus.modoRede;
     $('#mc-arquivo').hidden = hospedado || !!bus.modoRede;
-    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}` : bus.erroRede ? `Sem conexão com o broker (${bus.erroRede})` : 'Conectando ao broker...';
+    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}${bus.textoBrokers()}` : bus.erroRede ? `Ainda sem conexão (${bus.erroRede}). Tentando de novo...` : 'Conectando aos brokers...';
     $('#mc-estado').className = 'pill ' + (bus.mqttOk ? 'ok' : bus.modoRede ? 'warn' : '');
     $('#bt-mc-desligar').hidden = bus.modoRede !== 'nuvem';
     if (!bus.modoRede) return;
@@ -2068,9 +2094,9 @@ function iniciarPainel() {
     const outros = bus.modoRede === 'local' ? bus.info.ips.slice(1).map(ip => `http://${ip}:${bus.info.porta}/simulador.html`) : [];
     $('#mc-outros').textContent = outros.length ? 'Se não abrir, tente: ' + outros.join(' · ') : '';
   }
-  $('#bt-celular').onclick = () => { if (!$('#mc-broker').value) $('#mc-broker').value = BROKER_PADRAO; mostrarCelular(); };
+  $('#bt-celular').onclick = () => mostrarCelular();
   $('#bt-mc-conectar').onclick = async () => {
-    const cfg = { url: $('#mc-broker').value.trim() || BROKER_PADRAO, sala: novaSala() };
+    const cfg = { url: $('#mc-broker').value.trim() || 'auto', sala: novaSala() };
     const u = $('#mc-usuario').value.trim(); if (u) { cfg.usuario = u; cfg.senha = $('#mc-senha').value; }
     bus.usarNuvem(cfg); mostrarCelular();
   };
@@ -2338,7 +2364,8 @@ function iniciarSimulador() {
     // sem sala na nuvem e sem painel nesta máquina, a página simula sozinha (como antes)
     setTimeout(() => { if (papel === 'procurando' && !nuvem()) virarDono(new Simulador('verao'), 5); }, 1200);
   });
-  setInterval(() => { procurar(); if (papel !== 'dono') atualizarTopo(); }, 3000);
+  setInterval(procurar, 3000);
+  setInterval(() => { if (papel !== 'dono') atualizarTopo(); }, 1000);
   bus.aoMudarRede = () => atualizarRede();
   function atualizarRede() { const ch = $('#chip-rede'); if (!ch) return; ch.hidden = !bus.modoRede; ch.className = 'chip ' + (bus.mqttOk ? 'ok' : bus.erroRede ? 'crit' : 'neutro'); ch.textContent = bus.textoRede(); }
 }
