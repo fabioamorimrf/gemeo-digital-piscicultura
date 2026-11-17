@@ -1386,8 +1386,11 @@ const cor = nome => getComputedStyle(document.documentElement).getPropertyValue(
 const BROKER_PADRAO = 'wss://broker.hivemq.com:8884/mqtt';
 /* Brokers públicos usados juntos no modo automático: as duas pontas conectam em todos e publicam
    em todos, e as mensagens repetidas são descartadas pelo id. Basta um broker funcionar dos dois lados.
-   (O HiveMQ público às vezes não responde ao CONNECT: "connack timeout".) */
+   (O HiveMQ público às vezes não responde ao CONNECT: "connack timeout"; redes de universidade costumam
+   bloquear portas fora da 443.) */
 const BROKERS_PUBLICOS = [
+  // Eclipse usa a porta 443 (a mesma do HTTPS), que passa por redes que bloqueiam as portas 8084/8884/8081
+  { nome: 'Eclipse', url: 'wss://mqtt.eclipseprojects.io:443/mqtt' },
   { nome: 'HiveMQ', url: 'wss://broker.hivemq.com:8884/mqtt' },
   { nome: 'EMQX', url: 'wss://broker.emqx.io:8084/mqtt' },
   { nome: 'Mosquitto', url: 'wss://test.mosquitto.org:8081/mqtt' },
@@ -1883,7 +1886,7 @@ function iniciarPainel() {
     const hospedado = /^https?:$/.test(location.protocol);
     $('#mc-config').hidden = !!bus.modoRede || !hospedado; $('#mc-conectado').hidden = !bus.modoRede;
     $('#mc-arquivo').hidden = hospedado || !!bus.modoRede;
-    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}${bus.textoBrokers()}` : bus.erroRede ? `Ainda sem conexão (${bus.erroRede}). Tentando de novo...` : 'Conectando aos brokers...';
+    $('#mc-estado').textContent = !bus.modoRede ? '' : bus.mqttOk ? `Conectado: ${bus.descricaoRede()}${bus.textoBrokers()}` : bus.erroRede ? `Ainda sem conexão (${bus.erroRede}). Tentando de novo... Se nenhum conectar, a rede deste computador pode estar bloqueando: ligue o computador no roteador do celular (dados móveis) e tente outra vez.` : 'Conectando aos brokers...';
     $('#mc-estado').className = 'pill ' + (bus.mqttOk ? 'ok' : bus.modoRede ? 'warn' : '');
     $('#bt-mc-desligar').hidden = bus.modoRede !== 'nuvem';
     if (!bus.modoRede) return;

@@ -141,8 +141,8 @@
     <p class="sutil" id="mc-arquivo" style="margin:0;font-size:.88rem">Para controlar pelo celular, o site precisa estar hospedado (GitHub Pages, por exemplo) ou aberto pelo <span class="mono">servidor.py</span>. Aberto direto do arquivo, o celular não consegue acessar a página.</p>
     <div id="mc-config" class="mc-config">
       <p style="margin:0;font-size:.88rem">O computador e o celular trocam mensagens por um broker MQTT na internet, com um código de sala só desta apresentação.</p>
-      <label>Broker (WebSocket seguro)<input id="mc-broker" class="mono" spellcheck="false" placeholder="automático: HiveMQ, EMQX e Mosquitto"></label>
-      <p class="sutil" style="margin:0;font-size:.78rem">Deixe em branco para usar os três brokers públicos ao mesmo tempo: se um não responder, os outros levam as mensagens.</p>
+      <label>Broker (WebSocket seguro)<input id="mc-broker" class="mono" spellcheck="false" placeholder="automático: Eclipse (443), HiveMQ, EMQX e Mosquitto"></label>
+      <p class="sutil" style="margin:0;font-size:.78rem">Deixe em branco para usar os quatro brokers públicos ao mesmo tempo: se um não responder, os outros levam as mensagens.</p>
       <details><summary>Usuário e senha (só se o broker pedir)</summary>
         <label>Usuário<input id="mc-usuario" autocomplete="off"></label>
         <label>Senha<input id="mc-senha" type="password" autocomplete="off"></label>
@@ -154,7 +154,7 @@
       <span class="pill" id="mc-estado"></span>
       <div class="mc-qr" id="mc-qr"></div>
       <p class="mono mc-url" id="mc-url"></p>
-      <p class="sutil" style="margin:0;font-size:.85rem">Aponte a câmera do celular para o código. A simulação passa para o celular sem perder o estado, e este painel continua mostrando tudo.</p>
+      <p class="sutil" style="margin:0;font-size:.85rem">Aponte a câmera do celular para o código. O celular vira o controle remoto: a simulação continua rodando neste painel, que mostra tudo no projetor.</p>
       <p class="sutil" style="margin:0;font-size:.78rem" id="mc-outros"></p>
       <button class="btn" id="bt-mc-desligar">Desconectar e trocar de sala</button>
     </div>
