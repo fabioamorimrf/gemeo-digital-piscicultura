@@ -11,17 +11,22 @@ for c, (pov, tit) in enumerate([('2027-03-01', 'Povoamento em 01/03/2027 (ciclo 
     ft, fg = r['fim']['tabela']['dia'], r['fim']['gemeo']['dia']
     st = [p for p in s if p['dia'] <= ft]; sg = [p for p in s if p['dia'] <= fg]
     a.plot([p['dia'] for p in st], [p['Wtab'] for p in st], color='#c0504d', label='Lote A: tabela fixa')
-    a.plot([p['dia'] for p in sg], [p['Wgem'] for p in sg], color='#2e75b6', label='Lote B: gêmeo')
+    a.plot([p['dia'] for p in sg], [p['Wgem'] for p in sg], color='#2e75b6', ls='--', lw=1, label='Lote B: gêmeo anterior')
+    fc = r['fimCal']['gemeo']['dia']; sc = [p for p in r['serieCal'] if p['dia'] <= fc]
+    a.plot([p['dia'] for p in sc], [p['Wgem'] for p in sc], color='#2e8b57', label='Lote B: gêmeo calibrado')
+    a.plot([fc], [800], 'o', color='#2e8b57'); a.annotate(f"{fc} d", (fc, 800), textcoords='offset points', xytext=(-34, -4), fontsize=8, color='#2e8b57')
     a.axhline(800, color='0.5', ls=':', lw=1)
     for k, col in (('tabela', '#c0504d'), ('gemeo', '#2e75b6')):
-        f = r['fim'][k]; a.plot([f['dia']], [800], 'o', color=col); a.annotate(f"{f['dia']} d", (f['dia'], 800), textcoords='offset points', xytext=(-10, 8 if k == 'tabela' else -16), fontsize=8, color=col)
+        f = r['fim'][k]; a.plot([f['dia']], [800], 'o', color=col, mfc='white' if k == 'gemeo' else col); a.annotate(f"{f['dia']} d", (f['dia'], 800), textcoords='offset points', xytext=(-10, 8 if k == 'tabela' else -16), fontsize=8, color=col)
     a.set_title(tit, fontsize=10); a.set_ylabel('Peso médio (g)'); a.set_ylim(0, 880); a.legend(fontsize=8, loc='lower right')
     t = a.twinx(); t.plot(d, [p['Tw'] for p in s], color='0.6', lw=0.6); t.set_ylim(10, 40); t.set_ylabel('Água (°C)', color='0.5', fontsize=8); t.tick_params(labelsize=7, colors='0.5')
     b = ax[1][c]
     b.plot([p['dia'] for p in st], [p['Rtab'] for p in st], color='#c0504d', label='Lote A: tabela fixa')
-    b.plot([p['dia'] for p in sg], [p['Rgem'] for p in sg], color='#2e75b6', label='Lote B: gêmeo')
+    b.plot([p['dia'] for p in sg], [p['Rgem'] for p in sg], color='#2e75b6', ls='--', lw=1, label='Lote B: gêmeo anterior')
+    b.plot([p['dia'] for p in sc], [p['Rgem'] for p in sc], color='#2e8b57', label='Lote B: gêmeo calibrado')
+    b.annotate(f"{r['fimCal']['gemeo']['racao']:.0f} kg", (fc, r['fimCal']['gemeo']['racao']), textcoords='offset points', xytext=(-60, -26), fontsize=8, color='#2e8b57')
     b.set_ylabel('Ração acumulada (kg)'); b.set_xlabel('Dias desde o povoamento'); b.legend(fontsize=8, loc='lower right')
     for k, col in (('tabela', '#c0504d'), ('gemeo', '#2e75b6')):
-        f = r['fim'][k]; b.annotate(f"{f['racao']:.0f} kg", (f['dia'], f['racao']), textcoords='offset points', xytext=(-60, 4 if k == 'tabela' else -14), fontsize=8, color=col)
+        f = r['fim'][k]; b.annotate(f"{f['racao']:.0f} kg", (f['dia'], f['racao']), textcoords='offset points', xytext=(-60, 4 if k == 'tabela' else -14), fontsize=8, color=col) if k == 'tabela' else None
 fig.suptitle('Tilápia-do-nilo, 4.000 peixes de 30 g até 800 g, mesmo clima (semente 7)', fontsize=11)
 fig.tight_layout(); fig.savefig(out, dpi=150)

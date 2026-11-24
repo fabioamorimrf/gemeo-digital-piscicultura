@@ -466,7 +466,7 @@ class Simulador {
       this.v.aerador = ligar; this.origemAerador = 'gemeo';
     } else if (topico === 'comando/racao' && this.ctl.manejo === 'gemeo') {
       const kg = +valor;
-      const r = this.v.alimentar(kg, 1 / Math.max(1, this.planoRefeicoes || 3), this.verdade);
+      const r = this.v.alimentar(kg, 1 / refeicoesTabela(this.v.W), this.verdade);   // fração do apetite do dia: uma das refeições da tabela
       this.refeicoes.push({ t: this.t, kg, origem: 'gemeo' });
       // a sombra já come pela tabela no manejoTradicional
     }
@@ -652,7 +652,7 @@ function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240
   for (let d = 1; d <= diasMax; d++) {
     t += DIA;
     const Tw = NORMAIS.tmed[mesDe(t)] + desvioAgua * Math.exp(-d / 10);
-    const racao = W * pctTabela(W) / 100 * fatorTemperatura(Tw);
+    const racao = W * pctTabela(W) / 100 * fatorRacaoGemeo(Tw);
     const C = Math.min(racao, apetiteYi(W, Tw, 6, 0.02, alfa));
     W = Math.max(1, W + ganhoYi(W, Tw, C, alfa));
     if (d % 3 === 0) pts.push({ t, W });
@@ -669,12 +669,18 @@ function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240
 function fatorTemperatura(T) {
   if (T < 16) return 0; if (T < 20) return 0.6; if (T < 25) return 0.8; if (T < 30) return 1; if (T <= 32) return 0.8; return 0;
 }
+/* regra de ração do gêmeo, calibrada no experimento de lotes comparativos (validacao/, 24/11/2026):
+   mantém os limites de não alimentar do SENAR (abaixo de 16 °C e acima de 32 °C) e, entre eles, troca os
+   degraus fixos de 60% e 80% pelo teto de apetite do modelo de Yi calibrado pelas biometrias (α).
+   Com os degraus fixos, o gêmeo atrasava o abate em ~6 dias no verão chuvoso (água a 23–25 °C) sem
+   economizar ração. Calibrada contra o simulador, não contra dados de viveiro. */
+function fatorRacaoGemeo(T) { return T < 16 || T > 32 ? 0 : 1; }
 // oxigênio: só alimentar com OD > 3 mg/L (SENAR, 2019; Rotta et al., 2023)
 function fatorOD(od) { return od > 3 ? 1 : 0; }
 function prescreverRacao({ W, N, alfa, prevOD, TwMedio, t }) {
   const nRef = refeicoesTabela(W);
   const base = N * W * pctTabela(W) / 100 / 1000;                // kg/dia pela tabela
-  const fT = fatorTemperatura(TwMedio);
+  const fT = fatorRacaoGemeo(TwMedio);
   const teto = apetiteYi(W, TwMedio, 6, 0.02, alfa) * N / 1000;   // saciedade pelo modelo de Yi
   const dia0 = Math.floor(t / DIA) * DIA;
   const candidatas = [8, 9.5, 11, 12.5, 14, 15.5, 17];
@@ -690,8 +696,7 @@ function prescreverRacao({ W, N, alfa, prevOD, TwMedio, t }) {
   const Tt = TwMedio.toFixed(1).replace('.', ',');
   if (fT === 0) motivo = TwMedio < 16 ? `Água prevista a ${Tt} °C, abaixo de 16 °C: não alimentar (SENAR, 2019).` : `Água prevista a ${Tt} °C, acima de 32 °C: não alimentar (SENAR, 2019).`;
   else if (totalAlvo < base * fT - 1e-6) motivo = 'Limitado pelo apetite estimado pelo modelo de crescimento (Yi, 1998).';
-  else if (fT < 1) motivo = `Água prevista a ${Tt} °C: ${Math.round(fT * 100)}% da tabela (SENAR, 2019, Tabela 3).`;
-  else motivo = `Água prevista a ${Tt} °C, na faixa de 25 a 29 °C: 100% da tabela (SENAR, 2019).`;
+  else motivo = `Água prevista a ${Tt} °C: tabela cheia (SENAR, 2019); o apetite estimado do lote (Yi, 1998, α = ${String(alfa).replace('.', ',')}) está acima dela.`;
   if (refeicoes.some(r => r.fator < 1)) motivo += ' Refeições com OD previsto até 3 mg/L ficam suspensas.';
   return { nRef, base, fT, teto, alvo: totalAlvo, total, refeicoes, motivo, pct: total / (N * W / 1000) * 100 };
 }
@@ -810,7 +815,7 @@ function consequenciasSemana(dias, est) {
       }
       semAer = min;
     }
-    const TwMed = somaTw / n, fT = fatorTemperatura(TwMed);
+    const TwMed = somaTw / n, fT = fatorRacaoGemeo(TwMed);
     const base = N * W * pctTabela(W) / 100 / 1000;
     const sac = apetiteYi(W, TwMed, 6, 0.02, est.alfa) * N / 1000;
     const nRef = refeicoesTabela(W);
@@ -821,10 +826,10 @@ function consequenciasSemana(dias, est) {
     const flags = [];
     const zT = faixaZona('temp', TwMed);
     if (zT.nivel === 'morte') flags.push({ nivel: 'critico', txt: `Água a ${fmtNum(TwMed, 1)} °C: risco de morte por frio.`, refs: ['nobrega2020'] });
-    else if (TwMed < 20) flags.push({ nivel: 'critico', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo do conforto da tilápia: a alimentação pode parar; ração a ${Math.round(fT * 100)}% da tabela.`, refs: ['nobrega2020', 'rotta2023', 'senar2019'] });
-    else if (TwMed < 26) flags.push({ nivel: 'atencao', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo da faixa ideal (26 a 30 °C): menos apetite e crescimento; ${fT >= 1 ? 'a tabela ainda manda ração cheia (25 a 29 °C)' : `ração a ${Math.round(fT * 100)}% da tabela`}.`, refs: ['nobrega2020', 'senar2019'] });
+    else if (TwMed < 20) flags.push({ nivel: 'critico', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo do conforto da tilápia: a alimentação pode parar; ${fT > 0 ? 'ração limitada ao apetite estimado do lote' : 'não alimentar'}.`, refs: ['nobrega2020', 'rotta2023', 'senar2019', 'yi1998'] });
+    else if (TwMed < 26) flags.push({ nivel: 'atencao', txt: `Água a ${fmtNum(TwMed, 1)} °C, abaixo da faixa ideal (26 a 30 °C): menos apetite e crescimento; ração da tabela limitada ao apetite estimado do lote.`, refs: ['nobrega2020', 'senar2019', 'yi1998'] });
     else if (TwMed > 32) flags.push({ nivel: 'critico', txt: 'Água acima de 32 °C: não alimentar e vigiar o OD.', refs: ['senar2019', 'boyd2018a'] });
-    else if (TwMed >= 30) flags.push({ nivel: 'atencao', txt: 'Água acima da faixa ideal: menos oxigênio dissolvido e mais consumo; ração a 80%, antes do pico de calor.', refs: ['senar2019', 'nobrega2020', 'boyd2018a'] });
+    else if (TwMed >= 30) flags.push({ nivel: 'atencao', txt: 'Água acima da faixa ideal: menos oxigênio dissolvido e mais consumo; ração limitada ao apetite estimado, antes do pico de calor.', refs: ['senar2019', 'nobrega2020', 'boyd2018a'] });
     if (semAer && semAer.od < 4) {
       const zo = faixaZona('od', semAer.od).nivel;
       flags.push({ nivel: zo === 'atencao' ? 'atencao' : 'critico', txt: `Sem aeração, o OD chegaria a ${fmtNum(semAer.od, 1)} mg/L às ${fmtHora(semAer.t)}${zo === 'morte' ? ', com risco de morte' : zo === 'critico' ? ', na zona crítica' : ''}: programar aeração noturna.`, refs: zo === 'morte' ? ['yi1998', 'francis2003', 'boyd1978'] : zo === 'critico' ? ['senar2019', 'francis2003', 'boyd1978'] : ['trandy2008', 'francis2003', 'boyd1978'] });
@@ -840,4 +845,4 @@ function consequenciasSemana(dias, est) {
 }
 const fmtNum = (x, d) => x.toFixed(d).replace('.', ',');
 
-if (typeof module !== 'undefined') module.exports = { ZONAS, faixaZona, nivelZona, consequenciasSemana, ambienteEm, simularPeso, Simulador, CENARIOS, preverOD, ajustarOD, calibrarCrescimento, projetarCrescimento, prescreverRacao, decidirAerador, avaliarAlertas, apetiteYi, ganhoYi, tau, odSat, fracNH3, pctTabela, fatorTemperatura, NORMAIS, fmtHora, fmtData, horaDe, DIA, H, MIN };
+if (typeof module !== 'undefined') module.exports = { ZONAS, faixaZona, nivelZona, consequenciasSemana, ambienteEm, simularPeso, Simulador, CENARIOS, preverOD, ajustarOD, calibrarCrescimento, projetarCrescimento, prescreverRacao, decidirAerador, avaliarAlertas, apetiteYi, ganhoYi, tau, odSat, fracNH3, pctTabela, fatorTemperatura, fatorRacaoGemeo, NORMAIS, fmtHora, fmtData, horaDe, DIA, H, MIN };

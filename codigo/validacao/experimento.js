@@ -20,8 +20,13 @@ const X = ctx.__x, { Simulador, Gemeo, Viveiro, CENARIOS, DIA, H, MIN, fmtData, 
 
 // contabilidade de toda a ração desde o povoamento (o simulador zera os acumulados após a adaptação)
 const alimOrig = Viveiro.prototype.alimentar;
+/* teste de estresse (ESTRESSE=1): o peixe "real" come menos no frio do que o modelo de Yi diz:
+   o apetite real é multiplicado pelo fator de temperatura do SENAR (2019, Tabela 3) abaixo de 25 °C.
+   Só o apetite muda; a eficiência de conversão continua a mesma. */
+const ESTRESSE = process.env.ESTRESSE === '1';
 Viveiro.prototype.alimentar = function (kg, f, verd) {
-  const r = alimOrig.call(this, kg, f, verd);
+  const fApet = ESTRESSE && this.Tw < 25 ? X.fatorTemperatura(this.Tw) : 1;
+  const r = alimOrig.call(this, kg, f, fApet === 1 ? verd : { alfa: verd.alfa * fApet });
   this.tot = this.tot || { racao: 0, consumida: 0, desperdicio: 0, refeicoes: 0, suspensas: 0 };
   this.tot.racao += r.ofertado; this.tot.consumida += r.consumido; this.tot.desperdicio += r.ofertado - r.consumido;
   return r;
@@ -47,9 +52,13 @@ const POVOAMENTO_ADAPT = 35; // dias de adaptação comuns (PREAQUECIMENTO_DIAS 
 
 const fTOriginal = ctx.fatorTemperatura;
 // variante de sensibilidade: entre 20 e 30 °C o gêmeo não corta a tabela e deixa o teto de apetite de Yi limitar
-const fTVariante = T => (T >= 20 && T < 30) ? 1 : fTOriginal(T);
-function rodar({ povoamento, W0 = 30, N = 4000, seed = 7, aeracao = 'isolada', alvo = 800, diasMax = 400, variante = false }) {
-  ctx.fatorTemperatura = variante ? fTVariante : fTOriginal;
+const REGRAS = {
+  senar: fTOriginal,                                                   // regra anterior do gêmeo (degraus do SENAR 2019, Tabela 3)
+  v1: T => (T >= 20 && T < 30) ? 1 : fTOriginal(T),                    // sem o corte de 80% entre 20 e 30 °C
+  apetite: ctx.fatorRacaoGemeo                                         // regra calibrada (atual): limites de 16 e 32 °C e teto de apetite de Yi
+};
+function rodar({ povoamento, W0 = 30, N = 4000, seed = 7, aeracao = 'isolada', alvo = 800, diasMax = 400, variante = false, regra = null }) {
+  ctx.fatorRacaoGemeo = REGRAS[regra || (variante ? 'v1' : 'apetite')];
   const nome = 'exp_' + povoamento + '_' + W0;
   const [a, m, d] = povoamento.split('-').map(Number);
   CENARIOS[nome] = { nome, detalhe: '', inicio: Date.UTC(a, m - 1, d) + POVOAMENTO_ADAPT * DIA, N, W: W0 };
@@ -98,7 +107,17 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const out = path.join(__dirname, 'resultados');
   fs.mkdirSync(out, { recursive: true });
-  if (args.includes('--variante')) {
+  const iGrade = args.indexOf('--grade');
+  if (iGrade >= 0) {
+    // node validacao/experimento.js --grade <regra> <aeracao> <data>  -> resultados/grade-<regra>-<aeracao>-<data>.json
+    const [regra, aer, pov] = args.slice(iGrade + 1);
+    const res = [];
+    for (const seed of [7, 11, 23, 42, 101]) {
+      const r = rodar({ povoamento: pov, seed, aeracao: aer, regra }); delete r.serie; res.push(r);
+      console.log(regra, aer, pov, seed, 'dias', r.fim.tabela.dia, r.fim.gemeo.dia, 'racao', r.fim.tabela.racao.toFixed(0), r.fim.gemeo.racao.toFixed(0));
+    }
+    fs.writeFileSync(path.join(out, `${ESTRESSE ? 'estresse' : 'grade'}-${regra}-${aer}-${pov}.json`), JSON.stringify(res));
+  } else if (args.includes('--variante')) {
     const res = [];
     for (const pov of ['2027-03-01', '2027-06-01', '2027-09-01', '2027-12-01']) for (const seed of [7, 11, 23, 42, 101]) {
       const r = rodar({ povoamento: pov, seed, aeracao: 'isolada', variante: true }); delete r.serie;
