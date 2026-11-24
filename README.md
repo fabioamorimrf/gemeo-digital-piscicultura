@@ -24,7 +24,7 @@ Versão publicada: https://claude.ai/artifact/WNrph3FsMBnePVup81PJMP (privada; c
 
 1. **Estado normal** (5 min/s): leituras com as zonas da tilápia, OD previsto sem aeração (vermelho) e com o plano do gêmeo (verde), ração do dia.
 2. **Colapso das algas** (15 min/s): o OD previsto despenca à noite; o gêmeo liga o aerador antes de sair da zona de atenção.
-3. **Onda de frio** (1 h/s): a água sai da faixa ideal (26 a 30 °C), a ração cai pelo fator de temperatura do SENAR e o simulador mostra o desperdício do manejo tradicional.
+3. **Onda de frio** (1 h/s): a água sai da faixa ideal (26 a 30 °C), a ração do gêmeo cai junto com o apetite estimado dos peixes e o simulador mostra o desperdício do manejo tradicional.
 4. **Previsão 7 dias**: mostrar as noites de risco sem aeração, os dias nublados e a frente fria, cada consequência com a fonte entre parênteses.
 5. **Queda de internet**: o painel fica offline; o ESP32 liga o aerador sozinho abaixo de 3 mg/L.
 6. **Sonda de OD descalibrada**: o gêmeo compara a leitura com o modelo e acusa "leitura fora do esperado".
@@ -49,7 +49,7 @@ A amônia aparece como NH₃-N (nitrogênio da amônia não ionizada). Em mg/L d
 | Viveiro | Água segue a média do ar; balanço de O₂ (fotossíntese, respiração, troca com o ar, aerador); pH, amônia, mortalidade | Rotta 2023; Boyd 1978; Romaire e Boyd 1979; Kim e Jo 1999; Benson e Krause 1984; Emerson 1975 |
 | Previsão de OD (híbrida) | Balanço de O₂ com 4 parâmetros reestimados nas últimas 24 h | Boyd 1978; Romaire e Boyd 1979 |
 | Crescimento | Modelo de Yi com α calibrado pelas biometrias | Yi 1998; Dampin 2012 |
-| Ração | Tabela por peso × fator de temperatura; só com OD acima de 3 mg/L | SENAR 2019; Rotta 2023 |
+| Ração | Tabela por peso limitada ao apetite do modelo de Yi calibrado; não alimentar abaixo de 16 °C, acima de 32 °C nem com OD de 3 mg/L ou menos (avaliada no experimento de lotes comparativos, `codigo/validacao/`) | SENAR 2019; Rotta 2023; Yi 1998 |
 | Aeração | Liga com OD medido ou previsto abaixo de 4; desliga com 5 ou mais e sol | Francis-Floyd 2003; Tucker 2005 |
 | Previsão 7 dias | Open-Meteo (ou clima simulado) passado pelos mesmos modelos | Open-Meteo; Araújo 2017 para frente fria |
 
