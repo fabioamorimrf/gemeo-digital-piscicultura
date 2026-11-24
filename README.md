@@ -49,7 +49,7 @@ A amônia aparece como NH₃-N (nitrogênio da amônia não ionizada). Em mg/L d
 | Viveiro | Água segue a média do ar; balanço de O₂ (fotossíntese, respiração, troca com o ar, aerador); pH, amônia, mortalidade | Rotta 2023; Boyd 1978; Romaire e Boyd 1979; Kim e Jo 1999; Benson e Krause 1984; Emerson 1975 |
 | Previsão de OD (híbrida) | Balanço de O₂ com 4 parâmetros reestimados nas últimas 24 h | Boyd 1978; Romaire e Boyd 1979 |
 | Crescimento | Modelo de Yi com α calibrado pelas biometrias | Yi 1998; Dampin 2012 |
-| Ração | Tabela por peso limitada ao apetite do modelo de Yi calibrado; não alimentar abaixo de 16 °C, acima de 32 °C nem com OD de 3 mg/L ou menos (regra calibrada no experimento de lotes comparativos, `codigo/validacao/`) | SENAR 2019; Rotta 2023; Yi 1998 |
+| Ração | Tabela por peso limitada ao apetite do modelo de Yi calibrado; não alimentar abaixo de 16 °C, acima de 32 °C nem com OD de 3 mg/L ou menos (avaliada no experimento de lotes comparativos, `codigo/validacao/`) | SENAR 2019; Rotta 2023; Yi 1998 |
 | Aeração | Liga com OD medido ou previsto abaixo de 4; desliga com 5 ou mais e sol | Francis-Floyd 2003; Tucker 2005 |
 | Previsão 7 dias | Open-Meteo (ou clima simulado) passado pelos mesmos modelos | Open-Meteo; Araújo 2017 para frente fria |
 

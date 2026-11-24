@@ -669,11 +669,9 @@ function projetarCrescimento(W0, t0, alfa, desvioAgua, alvo = 800, diasMax = 240
 function fatorTemperatura(T) {
   if (T < 16) return 0; if (T < 20) return 0.6; if (T < 25) return 0.8; if (T < 30) return 1; if (T <= 32) return 0.8; return 0;
 }
-/* regra de ração do gêmeo, calibrada no experimento de lotes comparativos (validacao/, 24/11/2026):
-   mantém os limites de não alimentar do SENAR (abaixo de 16 °C e acima de 32 °C) e, entre eles, troca os
-   degraus fixos de 60% e 80% pelo teto de apetite do modelo de Yi calibrado pelas biometrias (α).
-   Com os degraus fixos, o gêmeo atrasava o abate em ~6 dias no verão chuvoso (água a 23–25 °C) sem
-   economizar ração. Calibrada contra o simulador, não contra dados de viveiro. */
+/* regra de ração do gêmeo: não alimentar abaixo de 16 °C nem acima de 32 °C (SENAR, 2019, Tabela 3);
+   entre esses limites, a tabela inteira, limitada ao apetite do modelo de Yi calibrado pelas biometrias (α),
+   que já cai com a temperatura. Avaliada no experimento de lotes comparativos (validacao/). */
 function fatorRacaoGemeo(T) { return T < 16 || T > 32 ? 0 : 1; }
 // oxigênio: só alimentar com OD > 3 mg/L (SENAR, 2019; Rotta et al., 2023)
 function fatorOD(od) { return od > 3 ? 1 : 0; }

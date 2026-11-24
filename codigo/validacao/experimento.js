@@ -5,8 +5,9 @@
    (src/modelo.js e src/gemeo.js).
 
    Uso (dentro de codigo/):
-     node validacao/experimento.js                 -> experimento principal
-     node validacao/experimento.js --robustez      -> 4 datas x 5 sementes
+     node validacao/experimento.js --grade isolada 2027-03-01
+     node validacao/experimento.js --serie 2027-03-01
+     ESTRESSE=1 node validacao/experimento.js --grade isolada 2027-03-01
    ===================================================================== */
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -50,15 +51,7 @@ class SimIsolado extends Simulador {
 
 const POVOAMENTO_ADAPT = 35; // dias de adaptação comuns (PREAQUECIMENTO_DIAS do simulador)
 
-const fTOriginal = ctx.fatorTemperatura;
-// variante de sensibilidade: entre 20 e 30 °C o gêmeo não corta a tabela e deixa o teto de apetite de Yi limitar
-const REGRAS = {
-  senar: fTOriginal,                                                   // regra anterior do gêmeo (degraus do SENAR 2019, Tabela 3)
-  v1: T => (T >= 20 && T < 30) ? 1 : fTOriginal(T),                    // sem o corte de 80% entre 20 e 30 °C
-  apetite: ctx.fatorRacaoGemeo                                         // regra calibrada (atual): limites de 16 e 32 °C e teto de apetite de Yi
-};
-function rodar({ povoamento, W0 = 30, N = 4000, seed = 7, aeracao = 'isolada', alvo = 800, diasMax = 400, variante = false, regra = null }) {
-  ctx.fatorRacaoGemeo = REGRAS[regra || (variante ? 'v1' : 'apetite')];
+function rodar({ povoamento, W0 = 30, N = 4000, seed = 7, aeracao = 'isolada', alvo = 800, diasMax = 400 }) {
   const nome = 'exp_' + povoamento + '_' + W0;
   const [a, m, d] = povoamento.split('-').map(Number);
   CENARIOS[nome] = { nome, detalhe: '', inicio: Date.UTC(a, m - 1, d) + POVOAMENTO_ADAPT * DIA, N, W: W0 };
@@ -104,42 +97,22 @@ function rodar({ povoamento, W0 = 30, N = 4000, seed = 7, aeracao = 'isolada', a
 }
 
 if (require.main === module) {
+  // node validacao/experimento.js --grade <aeracao> <data>  -> resultados/grade-<aeracao>-<data>.json (5 climas)
+  // node validacao/experimento.js --serie <data>            -> resultados/serie-<data>.json (semente 7, para o gráfico)
   const args = process.argv.slice(2);
   const out = path.join(__dirname, 'resultados');
   fs.mkdirSync(out, { recursive: true });
-  const iGrade = args.indexOf('--grade');
-  if (iGrade >= 0) {
-    // node validacao/experimento.js --grade <regra> <aeracao> <data>  -> resultados/grade-<regra>-<aeracao>-<data>.json
-    const [regra, aer, pov] = args.slice(iGrade + 1);
+  if (args[0] === '--grade') {
+    const [aer, pov] = args.slice(1);
     const res = [];
     for (const seed of [7, 11, 23, 42, 101]) {
-      const r = rodar({ povoamento: pov, seed, aeracao: aer, regra }); delete r.serie; res.push(r);
-      console.log(regra, aer, pov, seed, 'dias', r.fim.tabela.dia, r.fim.gemeo.dia, 'racao', r.fim.tabela.racao.toFixed(0), r.fim.gemeo.racao.toFixed(0));
+      const r = rodar({ povoamento: pov, seed, aeracao: aer }); delete r.serie; res.push(r);
+      console.log(aer, pov, seed, 'dias', r.fim.tabela.dia, r.fim.gemeo.dia, 'racao', r.fim.tabela.racao.toFixed(0), r.fim.gemeo.racao.toFixed(0));
     }
-    fs.writeFileSync(path.join(out, `${ESTRESSE ? 'estresse' : 'grade'}-${regra}-${aer}-${pov}.json`), JSON.stringify(res));
-  } else if (args.includes('--variante')) {
-    const res = [];
-    for (const pov of ['2027-03-01', '2027-06-01', '2027-09-01', '2027-12-01']) for (const seed of [7, 11, 23, 42, 101]) {
-      const r = rodar({ povoamento: pov, seed, aeracao: 'isolada', variante: true }); delete r.serie;
-      console.log(pov, seed, 'dias', r.fim.tabela.dia, r.fim.gemeo.dia, 'racao', r.fim.tabela.racao.toFixed(0), r.fim.gemeo.racao.toFixed(0));
-      res.push(r);
-    }
-    fs.writeFileSync(path.join(out, 'variante.json'), JSON.stringify(res, null, 1));
-  } else if (args.includes('--robustez')) {
-    const res = [];
-    for (const pov of ['2027-03-01', '2027-06-01', '2027-09-01', '2027-12-01']) for (const seed of [7, 11, 23, 42, 101]) for (const aer of ['isolada', 'completa']) {
-      const t0 = Date.now(); const r = rodar({ povoamento: pov, seed, aeracao: aer });
-      const f = r.fim; delete r.serie;
-      console.log(pov, seed, aer, 'dias', f.tabela && f.tabela.dia, f.gemeo && f.gemeo.dia, 'racao', f.tabela && f.tabela.racao.toFixed(0), f.gemeo && f.gemeo.racao.toFixed(0), ((Date.now() - t0) / 1000).toFixed(1) + 's');
-      res.push(r);
-    }
-    fs.writeFileSync(path.join(out, 'robustez.json'), JSON.stringify(res, null, 1));
-  } else {
-    for (const aer of ['isolada', 'completa']) {
-      const t0 = Date.now(); const r = rodar({ povoamento: '2027-09-01', seed: 7, aeracao: aer });
-      fs.writeFileSync(path.join(out, 'principal-' + aer + '.json'), JSON.stringify(r, null, 1));
-      console.log(aer, JSON.stringify(r.fim, (k, v) => typeof v === 'number' ? +v.toFixed(3) : v, 1), 'adapt', JSON.stringify(r.adapt), ((Date.now() - t0) / 1000).toFixed(1) + 's');
-    }
-  }
+    fs.writeFileSync(path.join(out, `${ESTRESSE ? 'estresse' : 'grade'}-${aer}-${pov}.json`), JSON.stringify(res));
+  } else if (args[0] === '--serie') {
+    const r = rodar({ povoamento: args[1], seed: 7, aeracao: 'isolada' });
+    fs.writeFileSync(path.join(out, `serie-${args[1]}.json`), JSON.stringify(r));
+  } else console.log('uso: --grade <isolada|completa> <AAAA-MM-DD> | --serie <AAAA-MM-DD>');
 }
 module.exports = { rodar };

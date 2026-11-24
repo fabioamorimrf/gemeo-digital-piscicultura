@@ -41,7 +41,7 @@ const ITENS_FONTES = [
   ['Fração de amônia não ionizada pela temperatura e pelo pH', 'fórmula', ['emerson1975'], 'geral'],
   ['Ração por faixa de peso, refeições por dia e conversão esperada', 'SENAR, Tabela 1', ['senar2019'], 'especie'],
   ['Não alimentar com a água abaixo de 16 °C ou acima de 32 °C', 'SENAR, Tabela 3', ['senar2019'], 'especie'],
-  ['Entre 16 e 32 °C, ração da tabela limitada ao apetite do modelo de Yi calibrado pelas biometrias, no lugar dos degraus de 60% e 80% do SENAR (calibrado contra o simulador no experimento de lotes comparativos)', 'regra do gêmeo', ['yi1998', 'senar2019'], 'derivado'],
+  ['Entre 16 e 32 °C, ração da tabela limitada ao apetite do modelo de Yi calibrado pelas biometrias (avaliada no simulador, com lotes comparativos)', 'regra do gêmeo', ['yi1998', 'senar2019'], 'derivado'],
   ['Só alimentar com OD acima de 3 mg/L', 'regra de ração', ['senar2019', 'rotta2023'], 'especie'],
   ['Aerar com OD medido ou previsto abaixo de 4 mg/L', 'regra do gêmeo', ['francis2003'], 'geral'],
   ['Desligar o aerador com OD de 5 mg/L ou mais e sol', 'regra do gêmeo', ['tucker2005', 'francis2003'], 'geral'],
